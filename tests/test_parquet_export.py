@@ -86,6 +86,18 @@ class ExportParquetTests(unittest.TestCase):
         payload["cities"][0]["timeline"] = []
         with self.assertRaisesRegex(ValueError, "1–200"):
             export_parquet.validate_payload(payload)
+        payload = self.payload()
+        payload["cities"][0]["timeline"][0]["addedMw"] = None
+        with self.assertRaisesRegex(ValueError, "null"):
+            export_parquet.validate_payload(payload)
+        payload = self.payload()
+        payload["counties"][0]["timeline"][0]["mw"] = "1"
+        with self.assertRaisesRegex(ValueError, "nonnumeric"):
+            export_parquet.validate_payload(payload)
+        payload = self.payload()
+        payload["cities"][0]["projects"] = True
+        with self.assertRaisesRegex(ValueError, "unexpected types"):
+            export_parquet.validate_payload(payload)
 
     def test_payload_validation_rejects_missing_core_field(self) -> None:
         payload = self.payload()
@@ -182,6 +194,11 @@ class ExportParquetTests(unittest.TestCase):
         fields = [pa.field(field.name, pa.float64() if field.name == "projects" else field.type) for field in export_parquet.CITY_SCHEMA]
         with self.assertRaisesRegex(validate_parquet.ValidationError, "fingerprint drifted"):
             validate_parquet.verify_schema("cities", pa.schema(fields))
+
+    def test_schema_generator_matches_validator_pins(self) -> None:
+        self.assertEqual(export_parquet.CITY_SCHEMA.names, sorted(export_parquet.CITY_SCHEMA.names))
+        import parquet_schema
+        self.assertEqual(parquet_schema.fingerprints(), validate_parquet.SCHEMA_FINGERPRINTS)
 
     def test_production_payload_round_trip_runs_both_entry_points(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

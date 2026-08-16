@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,11 @@ import pyarrow.parquet as pq
 from parquet_schema import CITY_SCHEMA, CITY_TIMELINE_SCHEMA, COUNTY_SCHEMA, COUNTY_TIMELINE_SCHEMA
 
 MAX_INPUT_BYTES = 25_000_000
+
+
+def finite_number(value: object) -> bool:
+    """Accept finite numeric data while rejecting booleans and nulls."""
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def put(target: dict[str, object], key: str, value: object) -> None:
@@ -68,7 +74,7 @@ def validate_payload(payload: object) -> dict[str, Any]:
             raise ValueError(f"city[{index}] id/name must be non-empty strings")
         if not isinstance(city["county"], str) or not city["county"] or (city["geoid"] is not None and (not isinstance(city["geoid"], str) or not city["geoid"])):
             raise ValueError(f"city[{index}] county must be a non-empty string and geoid must be null or a non-empty string")
-        if not isinstance(city["capacityMw"], (int, float)) or not isinstance(city["projects"], int):
+        if not finite_number(city["capacityMw"]) or not isinstance(city["projects"], int) or isinstance(city["projects"], bool):
             raise ValueError(f"city[{index}] capacityMw/projects have unexpected types")
         if not all(isinstance(utility, str) for utility in city["utilities"]):
             raise ValueError(f"city[{index}] utilities must contain only strings")
@@ -77,6 +83,8 @@ def validate_payload(payload: object) -> dict[str, Any]:
         for point_index, point in enumerate(city["timeline"]):
             if not isinstance(point, dict) or not {"year", "mw", "addedMw", "projects"} <= point.keys():
                 raise ValueError(f"city[{index}].timeline[{point_index}] is malformed")
+            if not isinstance(point["year"], int) or isinstance(point["year"], bool) or not isinstance(point["projects"], int) or isinstance(point["projects"], bool) or not finite_number(point["mw"]) or not finite_number(point["addedMw"]):
+                raise ValueError(f"city[{index}].timeline[{point_index}] contains null, boolean, nonnumeric, or non-finite values")
     for index, county in enumerate(payload["counties"]):
         if not isinstance(county, dict):
             raise ValueError(f"county[{index}] must be an object")
@@ -85,13 +93,15 @@ def validate_payload(payload: object) -> dict[str, Any]:
             raise ValueError(f"county[{index}] timeline must be an array")
         if not isinstance(county["slug"], str) or not county["slug"] or not isinstance(county["name"], str) or not county["name"]:
             raise ValueError(f"county[{index}] slug/name must be non-empty strings")
-        if not isinstance(county["capacityMw"], (int, float)) or not isinstance(county["projects"], int):
+        if not finite_number(county["capacityMw"]) or not isinstance(county["projects"], int) or isinstance(county["projects"], bool):
             raise ValueError(f"county[{index}] capacityMw/projects have unexpected types")
         if not 0 < len(county["timeline"]) <= 200:
             raise ValueError(f"county[{index}] timeline must contain 1–200 points")
         for point_index, point in enumerate(county["timeline"]):
             if not isinstance(point, dict) or not {"year", "mw"} <= point.keys():
                 raise ValueError(f"county[{index}].timeline[{point_index}] is malformed")
+            if not isinstance(point["year"], int) or isinstance(point["year"], bool) or not finite_number(point["mw"]):
+                raise ValueError(f"county[{index}].timeline[{point_index}] contains null, boolean, nonnumeric, or non-finite values")
     if len(payload["cities"]) > 1_000 or len(payload["counties"]) > 100:
         raise ValueError("Entity count exceeds the bounded California dataset contract")
     city_ids = [city["id"] for city in payload["cities"]]

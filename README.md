@@ -72,7 +72,7 @@ A second monthly workflow downloads the authoritative sources, rebuilds and vali
 
 When a reviewed data payload reaches `main`, a separate workflow exports flat city, county, and timeline Parquet tables with Zstandard compression. It publishes them as immutable GitHub Release snapshots with metadata, SHA-256 checksums, and GitHub build-provenance attestations. Parquet is intended for DuckDB, Polars, pandas, and other analytical clients; the browser continues to use the smaller static JSON without contacting an upstream API.
 
-The public Parquet wire types are pinned to the PyArrow version in `requirements-data-release.txt`. A deliberate schema change must update both `scripts/parquet_schema.py` and the independent fingerprints in `scripts/validate-parquet.py`; CI rejects one-sided drift.
+The public Parquet wire types are pinned to the PyArrow version in `requirements-data-release.txt`. A deliberate schema change must update both `scripts/parquet_schema.py` and the independent fingerprints in `scripts/validate-parquet.py`; CI rejects one-sided drift. Run `python scripts/parquet_schema.py` to print the canonical replacement fingerprint block for review.
 
 ## License
 

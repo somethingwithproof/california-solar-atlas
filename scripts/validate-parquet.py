@@ -65,6 +65,13 @@ def verify_schema(name: str, schema: object) -> None:
     check(observed == SCHEMA_FINGERPRINTS[name], f"{name} Parquet schema fingerprint drifted: {observed}")
 
 
+def verify_required_columns(table: object, name: str) -> None:
+    """Verify that every field published as required contains no null values."""
+    for field in table.schema:
+        if not field.nullable:
+            check(table.column(field.name).null_count == 0, f"{name}.{field.name} is required but contains null values")
+
+
 def flatten_expected(prefix: str, value: object, target: dict[str, object], skipped: frozenset[str]) -> None:
     """Independently reconstruct the documented flat row from canonical JSON."""
     if isinstance(value, dict):
@@ -141,6 +148,10 @@ def main() -> None:
         verify_schema("counties", counties.schema)
         verify_schema("city-timeline", city_timeline.schema)
         verify_schema("county-timeline", county_timeline.schema)
+        verify_required_columns(cities, "cities")
+        verify_required_columns(counties, "counties")
+        verify_required_columns(city_timeline, "city-timeline")
+        verify_required_columns(county_timeline, "county-timeline")
 
         expected_city_ids = Counter(city["id"] for city in payload["cities"])
         expected_county_ids = Counter(county["slug"] for county in payload["counties"])

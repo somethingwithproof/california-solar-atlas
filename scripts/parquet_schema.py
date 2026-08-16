@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import pyarrow as pa
 
 
@@ -63,3 +65,19 @@ COUNTY_TIMELINE_SCHEMA = schema(
     floats=["mw"],
     required=frozenset({"county", "county_id", "year", "mw"}),
 )
+
+
+def fingerprints() -> dict[str, str]:
+    """Return copy-ready canonical fingerprints for an intentional schema update."""
+    schemas = {"cities": CITY_SCHEMA, "counties": COUNTY_SCHEMA, "city-timeline": CITY_TIMELINE_SCHEMA, "county-timeline": COUNTY_TIMELINE_SCHEMA}
+    return {
+        name: hashlib.sha256("\n".join(f"{field.name}:{field.type}:{'nullable' if field.nullable else 'required'}" for field in value).encode()).hexdigest()
+        for name, value in schemas.items()
+    }
+
+
+if __name__ == "__main__":
+    print("SCHEMA_FINGERPRINTS = {")
+    for name, digest in fingerprints().items():
+        print(f'    "{name}": "{digest}",')
+    print("}")
