@@ -401,6 +401,9 @@ function applyPouCapacity(record, pou, { capacityMw, effectiveLowKw, effectiveHi
   const lowKw = pou.capacityRangeMwDc.low * 1000 * (0.995 ** Math.max(0, currentYear - 2001));
   const highKw = pou.capacityRangeMwDc.high * 1000;
   record.pouCapacity = pou;
+  // The registry note is replaced rather than prepended: it says this utility's capacity
+  // is missing, which this merge is what makes false. The note below carries the same
+  // city-specific fact (which utility) plus the limitation that actually still applies.
   record.coverage = {
     status: 'partial',
     note: `${pou.utility} capacity is included from ${pou.year} Form EIA-861 net metering. Project counts, sector splits, and the growth timeline below still come only from PG&E, SCE, and SDG&E records.`
@@ -602,7 +605,9 @@ const payload = {
       { name: 'California Department of Finance E-1/E-1H', role: '2026 city population and housing estimates', url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
       { name: 'U.S. Census Gazetteer', role: 'City representative coordinates', url: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.2024.html' },
       { name: 'California Energy Commission', role: 'Building climate-zone polygons', url: 'https://www.energy.ca.gov/files/building-climate-zones-map' },
-      { name: 'California Energy Commission CEC-1304B', role: '2024 all-utility county solar benchmark', url: cecCountyBenchmark.sourceUrl }
+      { name: 'California Energy Commission CEC-1304B', role: '2024 all-utility county solar benchmark', url: cecCountyBenchmark.sourceUrl },
+      { name: pouInputs.netMetering.sourceName, role: `${pouInputs.netMetering.year} municipal utility net-metered capacity`, url: pouInputs.netMetering.sourceUrl },
+      { name: pouInputs.territoryOverlap.sourceName, role: 'Utility service territory polygons for city attribution', url: pouInputs.territoryOverlap.sourceUrl }
     ]
   },
   cities: records,

@@ -25,7 +25,7 @@ California Energy Commission Form 1304(b) requires California utility distributi
 | Roseville Electric | Solar and interconnection program pages are public, but a current project inventory or citywide installed total was not found. | Mark Roseville partial. |
 | SMUD | SMUD reports more than 65,000 rooftop systems and nearly 430 MW across its service territory. Territory geography is not Sacramento city or county. | Coverage context only; do not assign the territory aggregate to Sacramento city. |
 | Imperial Irrigation District | IID reports 4,212 NEM systems/63.62 MW and 880 net-billing systems/12.48 MW. Its territory crosses city and county boundaries. | Coverage context only; do not assign the territory aggregate to a single city. |
-| LADWP and other public utilities | No common current public project-site feed was verified. A common utility-level feed does exist: Form EIA-861 reports cumulative net-metered capacity for at least 24 California POUs annually. See `power-mix-and-pou-sources.md`. | Mark affected cities partial. EIA-861 can support a coverage benchmark; it has no city field and cannot feed the city inventory. |
+| LADWP and other public utilities | No common current public project-site feed was verified. A common utility-level feed does exist and is now used: Form EIA-861 reports cumulative net-metered capacity for at least 24 California POUs annually, and the build attributes it to a city where the utility's CEC service territory lies inside that city. See `power-mix-and-pou-sources.md`. | Mark affected cities partial. EIA-861 supplies municipal city capacity after territory attribution; it carries no project records, so counts, sectors, and timelines stay IOU-only. |
 
 Primary utility references:
 

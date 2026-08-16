@@ -276,6 +276,24 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         asset.chmod(0o644)
 
 
+def is_previous_release(output: Path) -> bool:
+    """Recognize only a directory this exporter wrote, by its full asset manifest.
+
+    A stray metadata.json is not proof of ownership, and --replace deletes recursively.
+    """
+    if not (output / "SHA256SUMS").is_file():
+        return False
+    try:
+        metadata = json.loads((output / RELEASE_MARKER).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(metadata, dict) or metadata.get("sourceFile") != "california-solar-atlas.json":
+        return False
+    expected = {"california-solar-atlas.json", "metadata.json", "SHA256SUMS", "cities.parquet",
+                "counties.parquet", "city-timeline.parquet", "county-timeline.parquet"}
+    return expected.issubset({entry.name for entry in output.iterdir()})
+
+
 def prepare_output(output: Path, *, replace: bool = False) -> None:
     """Require an absent or empty directory and prepare for an atomic rename."""
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -288,8 +306,8 @@ def prepare_output(output: Path, *, replace: bool = False) -> None:
             raise RuntimeError(f"Output directory is not empty: {output} (pass --replace to overwrite a previous release)")
         # Only a directory this exporter wrote may be replaced; the marker keeps
         # --replace from touching an unrelated path someone pointed the run at.
-        if not (output / RELEASE_MARKER).is_file():
-            raise RuntimeError(f"Refusing to replace {output}: no {RELEASE_MARKER} from a previous release")
+        if not is_previous_release(output):
+            raise RuntimeError(f"Refusing to replace {output}: it does not carry a complete release manifest from this exporter")
         # The existing release stays on disk until the new one is built.
         return
     try:

@@ -16,7 +16,10 @@ const slugify = (value) => value.normalize('NFD').replace(/\p{M}/gu, '').toLower
 const cityUrl = (city) => { const url = new URL(location.href); url.searchParams.set('city', slugify(city.name)); url.searchParams.delete('county'); return url; };
 const countyUrl = (county) => { const url = new URL(location.href); url.searchParams.set('county', county.slug); url.searchParams.delete('city'); return url; };
 const uniqueCities = (cities) => [...new Map(cities.filter(Boolean).map((city) => [city.id, city])).values()];
-const generationMid = (city) => (city.generationGwh.low + city.generationGwh.high) / 2;
+const generationRange = (city) => city.totalGenerationRangeGwh || city.generationGwh;
+const generationMid = (city) => (generationRange(city).low + generationRange(city).high) / 2;
+const capacityRange = (city) => city.totalCapacityRangeMwDc || { low: city.capacityMw, high: city.capacityMw };
+const capacityMid = (city) => (capacityRange(city).low + capacityRange(city).high) / 2;
 const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ? generationMid(city) / (deliveries + generationMid(city)) * 100 : null;
 const coverageStatus = (city) => ['reported', 'partial', 'unverified'].includes(city.coverage?.status) ? city.coverage.status : 'unverified';
 const zoneLabel = (city) => city.climateZone == null ? 'unassigned' : escapeHtml(city.climateZone);
@@ -50,7 +53,7 @@ const glossary = {
 const term = (label, key) => `<span class="term" tabindex="0" role="note" aria-label="${escapeHtml(label)}. ${escapeHtml(glossary[key])}">${escapeHtml(label)}<i class="tip" aria-hidden="true">${escapeHtml(glossary[key])}</i></span>`;
 
 const metricConfig = {
-  capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: (city) => city.capacityMw, display: (value) => `${format.format(value)} MW` },
+  capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: capacityMid, display: (value) => `${format.format(value)} MW` },
   generation: { label: 'Estimated generation', short: 'GWh/year', value: generationMid, display: (value) => `${format.format(value)} GWh` },
   growth5yPct: { label: 'Five-year growth', short: '5-year growth', value: (city) => city.growth5yPct, display: (value) => `${format.format(value)}%` }
 };
@@ -106,7 +109,7 @@ function shell(meta) {
         </div>
         <p class="formula"><span>Solar share</span> = degradation-adjusted gross generation ÷ (grid deliveries + degradation-adjusted gross generation)</p>
       </section>
-      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${sourceLinks(meta.sources)}<div class="sources-reference"><h3>Coverage this build does not include</h3><p>Nothing above or below this line is mixed together. These are published so the gaps are checkable; no figure on this page is derived from them.</p></div>${sourceLinks(referenceSources.sources)}</div></section>
+      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${sourceLinks(meta.sources)}<div class="sources-reference"><h3>Coverage this build still does not include</h3><p>Nothing above or below this line is mixed together. The sources above produced the figures on this page. These below did not; they are published so the remaining gaps stay checkable.</p></div>${sourceLinks(referenceSources.sources)}</div></section>
     </main>
     <footer><div><strong>California Solar Atlas</strong><span>Open data · Open methodology · MIT licensed</span></div><div class="footer-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer">GitHub <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/releases" target="_blank" rel="noreferrer">Data releases <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer">Report an issue <b aria-hidden="true">↗</b></a><button type="button" data-action="limits">Data limitations</button></div></footer>
     ${limitsDialog(meta)}
@@ -247,8 +250,9 @@ function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
   state.city = city;
   const status = coverageStatus(city);
   const share = solarShare(city);
-  const shareLow = city.load ? city.generationGwh.low / (city.load.highDeliveriesGwh + city.generationGwh.low) * 100 : null;
-  const shareHigh = city.load ? city.generationGwh.high / (city.load.lowDeliveriesGwh + city.generationGwh.high) * 100 : null;
+  const generation = generationRange(city);
+  const shareLow = city.load ? generation.low / (city.load.highDeliveriesGwh + generation.low) * 100 : null;
+  const shareHigh = city.load ? generation.high / (city.load.lowDeliveriesGwh + generation.high) * 100 : null;
   const view = document.querySelector('#city-view');
   view.innerHTML = `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · ${term('CEC climate zone', 'climateZone')} ${zoneLabel(city)}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}${geographyBadge(city)}<button data-action="share">Share</button><button data-action="csv">Download CSV</button></div></div>
     <div class="coverage-note ${status}"><strong>${status === 'partial' ? 'Treat this capacity as a lower bound.' : 'Coverage note'}</strong><span>${escapeHtml(city.coverage.note)}</span><button data-action="limits" aria-label="Read all data limitations">?</button></div>
@@ -323,7 +327,7 @@ function renderCompare() {
   if (!state.compare.length) { document.querySelector('#compare-view').innerHTML = '<div class="compare-empty">Search above to add cities to this comparison.</div>'; return; }
   const metrics = [['capacityMw', 'Reported capacity', 'MW'], ['projects', 'Project sites', 'sites'], ['generation', 'Generation midpoint', 'GWh'], ['growth5yPct', 'Five-year growth', '%']];
   const metricRow = (city, [metric, label, unit]) => {
-    const getValue = (item) => metric === 'generation' ? generationMid(item) : item[metric];
+    const getValue = (item) => ({ generation: generationMid, capacityMw: capacityMid })[metric]?.(item) ?? item[metric];
     const value = getValue(city);
     const max = Math.max(...state.compare.map((item) => getValue(item) || 0), 1);
     const display = value == null ? '—' : `${format.format(value)} ${unit}`;

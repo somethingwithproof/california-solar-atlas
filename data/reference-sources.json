@@ -2,11 +2,6 @@
   "note": "Reference sources for coverage the current build does not include. These are not pipeline inputs and no published figure is derived from them. Audited in docs/power-mix-and-pou-sources.md.",
   "sources": [
     {
-      "name": "Form EIA-861 Net Metering",
-      "role": "Net-metered capacity for municipal utilities",
-      "url": "https://www.eia.gov/electricity/data/eia861/"
-    },
-    {
       "name": "CEC Power Content Label",
       "role": "Annual power mix by retail supplier",
       "url": "https://www.energy.ca.gov/programs-and-topics/programs/power-source-disclosure-program/power-content-label"
