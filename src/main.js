@@ -1,196 +1,249 @@
 import './styles.css';
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/cities.json`;
+const BOUNDARIES_URL = `${import.meta.env.BASE_URL}data/boundaries.json`;
 const app = document.querySelector('#app');
+const state = { data: null, boundaries: {}, city: null, compare: [], mapMetric: 'wattsPerPerson', rankMetric: 'wattsPerPerson' };
+const format = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+const integer = new Intl.NumberFormat('en-US');
 
-const number = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
-const whole = new Intl.NumberFormat('en-US');
+const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+const generationMid = (city) => (city.generationGwh.low + city.generationGwh.high) / 2;
+const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ? generationMid(city) / (deliveries + generationMid(city)) * 100 : null;
+const coverageLabel = (status) => ({ reported: 'IOU records found', partial: 'Partial utility coverage', unverified: 'Coverage unverified' })[status] || status;
+const metricConfig = {
+  wattsPerPerson: { label: 'Watts per resident', short: 'W/person', value: (city) => city.wattsPerPerson, display: (value) => `${format.format(value)} W` },
+  capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: (city) => city.capacityMw, display: (value) => `${format.format(value)} MW` },
+  generation: { label: 'Estimated generation', short: 'GWh/year', value: generationMid, display: (value) => `${format.format(value)} GWh` },
+  growth5yPct: { label: 'Five-year growth', short: '5-year growth', value: (city) => city.growth5yPct, display: (value) => `${format.format(value)}%` }
+};
 
-function escapeHtml(value = '') {
-  return String(value).replace(/[&<>'"]/g, (character) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
-  })[character]);
-}
-
-function slugify(value) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
-
-function confidenceLabel(city) {
-  if (city.load?.kind === 'measured') return ['Measured', 'good'];
-  if (city.load?.kind === 'modeled') return ['Modeled', 'modeled'];
-  return ['Capacity only', 'limited'];
-}
-
-function generationRange(city) {
-  return [city.capacityMw * 1.4, city.capacityMw * 1.5];
-}
-
-function renderShell(meta) {
+function shell(meta) {
   app.innerHTML = `
     <header class="site-header">
-      <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="California Solar Atlas home">
-        <span class="brand-mark" aria-hidden="true"><span></span></span>
-        <span>California Solar Atlas</span>
-      </a>
-      <nav aria-label="Primary navigation">
-        <a href="#explore">Explore</a><a href="#methodology">Methodology</a><a href="#about">About</a>
-      </nav>
-      <button class="limits-button" type="button" data-open-limits aria-haspopup="dialog"><span aria-hidden="true">?</span> Data limits</button>
-      <a class="source-link" href="https://www.californiadgstats.ca.gov/downloads/" target="_blank" rel="noreferrer">View source ↗</a>
+      <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="California Solar Atlas home"><span class="brand-mark" aria-hidden="true"><span></span></span><span>California Solar Atlas</span></a>
+      <nav aria-label="Primary"><a href="#explore">Explore</a><a href="#map">Map</a><a href="#rankings">Rankings</a><a href="#compare">Compare</a><a href="#methodology">Methodology</a></nav>
+      <button class="limits-button" type="button" data-action="limits"><span aria-hidden="true">?</span> Data limits</button>
     </header>
     <main id="main">
       <section class="hero" id="explore">
-        <div class="eyebrow"><span></span> Distributed solar across California</div>
+        <div class="eyebrow"><span></span> Reported distributed solar across California</div>
         <h1>How solar is growing,<br><em>city by city.</em></h1>
-        <p class="hero-copy">Search every incorporated California city to see installed capacity, estimated annual generation, and—where defensible load data exists—the share of local electricity use met by distributed solar.</p>
-        <div class="search-wrap">
+        <p class="hero-copy">Search every incorporated California city. Compare reported capacity, climate-adjusted generation, growth, storage, and data confidence without filling gaps with county estimates.</p>
+        <div class="search-wrap" data-search="primary">
           <label for="city-search">Find a California city</label>
-          <div class="search-control">
-            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg>
-            <input id="city-search" type="search" autocomplete="off" placeholder="Try Pleasanton, Fresno, or San Diego" aria-controls="search-results" aria-expanded="false" />
-            <kbd>⌘ K</kbd>
-          </div>
+          <div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="city-search" type="search" autocomplete="off" placeholder="Try Chula Vista, Fresno, or Eureka" aria-controls="search-results" aria-expanded="false"><kbd>⌘ K</kbd></div>
           <div id="search-results" class="search-results" role="listbox" hidden></div>
         </div>
-        <div class="hero-meta">
-          <span><strong>${whole.format(meta.cityCount)}</strong> incorporated cities</span>
-          <span><strong>${number.format(meta.totalCapacityMw / 1000)} GW</strong> tracked statewide</span>
-          <span>Data through <strong>${escapeHtml(meta.dataThrough)}</strong></span>
-        </div>
+        <div class="hero-meta"><span><strong>${integer.format(meta.cityCount)}</strong> incorporated cities</span><span><strong>${format.format(meta.totalCapacityMw / 1000)} GW</strong> reported in source</span><span>Data through <strong>${escapeHtml(meta.dataThrough)}</strong></span></div>
       </section>
       <section id="city-view" class="city-view" aria-live="polite"></section>
-      <section class="method" id="methodology">
-        <div>
-          <div class="eyebrow"><span></span> Transparent by design</div>
-          <h2>One number,<br>three layers of evidence.</h2>
-        </div>
+      <section id="map" class="map-section section-pad">
+        <div class="section-heading"><div><div class="eyebrow"><span></span> Statewide view</div><h2>See the pattern.</h2></div><p>Official incorporated-city polygons are shaded by the selected metric. Values still use utility service-city strings, so the map visualizes—but does not repair—the mailing-boundary mismatch.</p></div>
+        <div class="map-toolbar"><label for="map-metric">Shade cities by</label><select id="map-metric">${metricOptions(state.mapMetric)}</select><span class="map-legend"><i></i> Lower <i></i> Higher</span></div>
+        <div class="map-layout"><div id="solar-map" class="solar-map"></div><aside id="map-summary" class="map-summary"></aside></div>
+      </section>
+      <section id="rankings" class="rankings section-pad">
+        <div class="section-heading"><div><div class="eyebrow"><span></span> Comparable measures</div><h2>City rankings.</h2></div><p>Per-resident and growth measures make smaller communities visible. Partial-coverage cities remain labeled and are never silently mixed with complete-looking records.</p></div>
+        <div class="rank-toolbar"><label for="rank-metric">Rank by</label><select id="rank-metric">${metricOptions(state.rankMetric)}</select><label class="toggle"><input id="minimum-population" type="checkbox" checked><span></span> Population 10,000+</label><label class="toggle"><input id="exclude-partial" type="checkbox" checked><span></span> Exclude partial coverage</label></div>
+        <div id="ranking-table" class="ranking-table"></div>
+      </section>
+      <section id="compare" class="compare section-pad">
+        <div class="section-heading"><div><div class="eyebrow"><span></span> Side by side</div><h2>Compare cities.</h2></div><p>Add up to four cities. Every comparison keeps the same capacity basis, degradation assumption, and location-specific yield method.</p></div>
+        <div class="compare-search search-wrap" data-search="compare"><label for="compare-search">Add a city</label><div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="compare-search" type="search" autocomplete="off" placeholder="Search to add a city" aria-controls="compare-results" aria-expanded="false"><span class="compare-count">0 / 4</span></div><div id="compare-results" class="search-results" role="listbox" hidden></div></div>
+        <div id="compare-view"></div>
+      </section>
+      <section class="method section-pad" id="methodology">
+        <div><div class="eyebrow"><span></span> Transparent by design</div><h2>One result,<br>four evidence layers.</h2></div>
         <div class="method-grid">
-          <article><span>01</span><h3>Installed capacity</h3><p>Real interconnected project sites, grouped by utility service city. This is the strongest statewide measure.</p></article>
-          <article><span>02</span><h3>Solar generation</h3><p>A clearly labeled estimate from DC capacity using a fleet yield of 1,400–1,500 kWh per kW-year.</p></article>
-          <article><span>03</span><h3>Share of use</h3><p>Shown only when city-level load is available. Gross use equals grid deliveries plus behind-the-meter generation.</p></article>
+          <article><span>01</span><h3>Reported capacity</h3><p>Positive PTC kW-DC values from PG&amp;E, SCE, and SDG&amp;E project-site files. AC values are not mixed into the total.</p></article>
+          <article><span>02</span><h3>Location-specific generation</h3><p>CEC climate-zone fleet yields span 1,250–1,750 kWh/kW-DC-year. Each vintage loses 0.5% of output per year.</p></article>
+          <article><span>03</span><h3>Gross electricity use</h3><p>Shown only with a documented city load source. Modeled self-generation is restored to net grid deliveries.</p></article>
+          <article><span>04</span><h3>Quality and coverage</h3><p>Mailing geography, municipal-utility gaps, and approval-date history are surfaced alongside every result.</p></article>
         </div>
-        <p class="formula"><span>Solar share</span> = gross distributed generation ÷ (grid deliveries + gross distributed generation)</p>
+        <p class="formula"><span>Solar share</span> = degradation-adjusted gross generation ÷ (grid deliveries + degradation-adjusted gross generation)</p>
       </section>
-      <section class="about" id="about">
-        <p>Built for public understanding, not false precision.</p>
-        <p>Capacity is observable. Generation is estimated. City electricity use is often unavailable publicly. Every result says which is which.</p>
-      </section>
+      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${meta.sources.map((source) => `<a href="${source.url}" target="_blank" rel="noreferrer"><span>${escapeHtml(source.role)}</span><strong>${escapeHtml(source.name)}</strong><b>↗</b></a>`).join('')}</div></section>
     </main>
-    <footer><span>California Solar Atlas</span><span>Open data · Open methodology</span></footer>
-    <dialog class="limits-dialog" aria-labelledby="limits-title">
-      <form method="dialog"><button class="dialog-close" aria-label="Close data limitations">×</button></form>
-      <div class="eyebrow"><span></span> Before you use these numbers</div>
-      <h2 id="limits-title">What this data can—and cannot—tell you.</h2>
-      <div class="limits-list">
-        <article><b>Capacity is reported, not production.</b><p>Project sites provide interconnected nameplate capacity. Annual generation is a modeled range of 1,400–1,500 kWh per kW-DC, not meter data.</p></article>
-        <article><b>Service city is not a boundary overlay.</b><p>Projects are grouped by the utility-reported service-city field. Mailing conventions and municipal borders can differ, so totals may not align perfectly with legal city boundaries.</p></article>
-        <article><b>City electricity use is the missing half.</b><p>California does not publish a complete city-level consumption series. A solar-share percentage appears only where a defensible local load source has been onboarded and documented.</p></article>
-        <article><b>Gross use needs an add-back.</b><p>Behind-the-meter solar reduces grid deliveries. Where a share is shown, modeled self-generation is added back before calculating the percentage.</p></article>
-        <article><b>Utility coverage is incomplete.</b><p>The source files cover PG&amp;E, SCE, and SDG&amp;E Rule 21 projects. Municipal utilities—including LADWP and SMUD—are not represented, so affected city totals are lower bounds.</p></article>
-        <article><b>Records change over time.</b><p>Pending and decommissioned projects are excluded. Applications can be corrected or superseded in later releases, which can revise historical-looking trends.</p></article>
-      </div>
-      <p class="dialog-note">Use these results for community-scale exploration and comparison—not billing, engineering, financial, or regulatory decisions.</p>
-      <form method="dialog"><button class="dialog-action">I understand</button></form>
-    </dialog>
-  `;
-  const dialog = document.querySelector('.limits-dialog');
-  document.querySelector('[data-open-limits]').addEventListener('click', () => dialog.showModal());
-  dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) dialog.close();
-  });
+    <footer><span>California Solar Atlas</span><span>Open data · Open methodology · MIT licensed</span></footer>
+    ${limitsDialog()}
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>`;
 }
 
-function sparkline(city) {
-  const points = city.timeline || [];
-  if (!points.length || city.capacityMw === 0) return '<div class="empty-chart">No photovoltaic capacity reported</div>';
-  const width = 720, height = 190, pad = 8;
-  const max = Math.max(...points.map((point) => point.mw), 1);
-  const coords = points.map((point, index) => {
-    const x = pad + (index / Math.max(points.length - 1, 1)) * (width - pad * 2);
-    const y = height - pad - (point.mw / max) * (height - pad * 2);
-    return [x, y];
-  });
-  const line = coords.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const area = `${line} L${coords.at(-1)[0]},${height} L${coords[0][0]},${height} Z`;
-  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Cumulative installed solar capacity from ${points[0].year} to ${points.at(-1).year}">
-    <defs><linearGradient id="sun-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaa72c" stop-opacity=".32"/><stop offset="1" stop-color="#eaa72c" stop-opacity="0"/></linearGradient></defs>
-    <path class="area" d="${area}"/><path class="line" d="${line}"/>
-  </svg><div class="chart-axis"><span>${points[0].year}</span><span>${points.at(-1).year}</span></div>`;
+function metricOptions(selected) {
+  return Object.entries(metricConfig).map(([value, config]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${config.label}</option>`).join('');
 }
 
-function renderCity(city, meta, shouldScroll = true) {
-  const [low, high] = generationRange(city);
-  const [label, tone] = confidenceLabel(city);
-  const hasShare = city.load && Number.isFinite(city.load.deliveriesGwh);
-  const midpoint = (low + high) / 2;
-  const share = hasShare ? midpoint / (city.load.deliveriesGwh + midpoint) * 100 : null;
-  document.querySelector('#city-view').innerHTML = `
-    <div class="city-heading">
-      <div><div class="eyebrow"><span></span> ${escapeHtml(city.county)} County</div><h2>${escapeHtml(city.name)}</h2></div>
-      <span class="status ${tone}"><i></i>${label}</span>
-    </div>
-    <div class="metrics">
-      <article><span>Reported capacity</span><strong>${number.format(city.capacityMw)} <small>MW-DC</small></strong><p>${whole.format(city.projects)} interconnected PV project sites</p></article>
-      <article><span>Estimated generation</span><strong>${number.format(low)}–${number.format(high)} <small>GWh/yr</small></strong><p>Modeled fleet production range</p></article>
-      <article class="share-card"><span>Share of city electricity use</span>${hasShare ? `<strong>≈ ${number.format(share)}<small>%</small></strong><p>${escapeHtml(city.load.year)} ${escapeHtml(city.load.kind)} load basis</p>` : `<strong class="not-available">Not available</strong><p>Public city-level load has not been verified</p>`}</article>
-    </div>
-    <div class="detail-grid">
-      <article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative MW-DC</h3></div><strong>${number.format(city.capacityMw)} MW</strong></div>${sparkline(city)}</article>
-      <aside class="read-panel"><span>How to read this</span><h3>${hasShare ? 'A defensible estimate, not a meter reading.' : 'Reported capacity is known. Consumption is not.'}</h3><p>${hasShare ? `The percentage restores modeled behind-the-meter generation to delivered electricity before calculating the share. ${escapeHtml(city.load.note || '')}` : `The project-site dataset reports installed solar in ${escapeHtml(city.name)}, but California does not publish comprehensive electricity use for every city. We do not substitute county data.`}</p><a href="#methodology">Read the methodology <b>→</b></a></aside>
-    </div>
-    <div class="provenance"><span>Source</span><p>California Distributed Generation Statistics · Interconnected Project Sites · ${escapeHtml(meta.dataThrough)}</p><span>Coverage</span><p>Rule 21 interconnected photovoltaic projects; pending and decommissioned projects excluded.</p></div>
-  `;
-  if (shouldScroll) document.querySelector('#city-view').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  history.replaceState(null, '', `#city=${slugify(city.name)}`);
+function limitsDialog() {
+  return `<dialog class="limits-dialog" aria-labelledby="limits-title"><form method="dialog"><button class="dialog-close" aria-label="Close data limitations">×</button></form><div class="eyebrow"><span></span> Before you use these numbers</div><h2 id="limits-title">What this data can—and cannot—tell you.</h2><div class="limits-list">
+    <article><b>Reported capacity is not production.</b><p>DC nameplate comes from interconnected project records. Generation uses a CEC climate-zone fleet range and 0.5% annual degradation, not production meters.</p></article>
+    <article><b>Service city is mailing geography.</b><p>The May 2026 public Project Sites files contain city and ZIP but no project coordinates or street addresses. Totals cannot yet be spatially joined to municipal polygons and may include an unincorporated mailing shadow.</p></article>
+    <article><b>Utility coverage varies.</b><p>Source files cover PG&amp;E, SCE, and SDG&amp;E. LADWP, SMUD, and other public utilities are absent, so affected city totals are explicitly marked as partial lower bounds.</p></article>
+    <article><b>Historical growth is a proxy.</b><p>The chart groups currently listed projects by approval date. A superseding application can inherit a later date, so the series is not a frozen historical inventory.</p></article>
+    <article><b>City electricity use is scarce.</b><p>A solar-share percentage appears only where a documented local load source is onboarded. County consumption is never substituted.</p></article>
+    <article><b>The inventory has opposing errors.</b><p>Behind-the-fence systems can be absent while incomplete decommissioning can leave retired systems listed. Treat capacity as a reported inventory, not an audited physical census.</p></article>
+  </div><p class="dialog-note">Use these results for community exploration—not billing, engineering, financial, or regulatory decisions.</p><form method="dialog"><button class="dialog-action">I understand</button></form></dialog>`;
 }
 
-function initSearch(data) {
-  const input = document.querySelector('#city-search');
-  const results = document.querySelector('#search-results');
+function setupSearch(root, mode) {
+  const input = root.querySelector('input');
+  const results = root.querySelector('.search-results');
   let active = -1;
   const show = () => {
     const query = input.value.trim().toLowerCase();
-    const matches = data.cities.filter((city) => `${city.name} ${city.county}`.toLowerCase().includes(query)).slice(0, 8);
-    results.innerHTML = matches.map((city, index) => `<button type="button" role="option" data-index="${data.cities.indexOf(city)}" aria-selected="${index === active}"><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span class="result-value">${number.format(city.capacityMw)} MW</span></button>`).join('');
+    const matches = state.data.cities.filter((city) => `${city.name} ${city.county}`.toLowerCase().includes(query) && (mode !== 'compare' || !state.compare.includes(city))).slice(0, 8);
+    results.innerHTML = matches.map((city, index) => `<button type="button" role="option" data-geoid="${city.geoid}" aria-selected="${index === active}"><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County · ${coverageLabel(city.coverage.status)}</small></span><span class="result-value">${format.format(city.capacityMw)} MW</span></button>`).join('');
     results.hidden = !matches.length;
     input.setAttribute('aria-expanded', String(matches.length > 0));
-    results.querySelectorAll('button').forEach((button) => button.addEventListener('click', () => select(Number(button.dataset.index))));
-  };
-  const select = (index) => {
-    const city = data.cities[index];
-    if (!city) return;
-    input.value = city.name;
-    results.hidden = true;
-    input.setAttribute('aria-expanded', 'false');
-    renderCity(city, data.meta);
   };
   input.addEventListener('input', () => { active = -1; show(); });
   input.addEventListener('focus', show);
   input.addEventListener('keydown', (event) => {
     const buttons = [...results.querySelectorAll('button')];
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault(); active = Math.max(0, Math.min(buttons.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1))); show();
-    } else if (event.key === 'Enter' && buttons.length) { event.preventDefault(); (buttons[active < 0 ? 0 : active]).click(); }
+    if (['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); active = Math.max(0, Math.min(buttons.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1))); show(); }
+    else if (event.key === 'Enter' && buttons.length) { event.preventDefault(); buttons[active < 0 ? 0 : active].click(); }
     else if (event.key === 'Escape') { results.hidden = true; input.setAttribute('aria-expanded', 'false'); }
   });
-  document.addEventListener('keydown', (event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); input.focus(); } });
-  document.addEventListener('click', (event) => { if (!event.target.closest('.search-wrap')) results.hidden = true; });
-  const requested = location.hash.startsWith('#city=') ? location.hash.slice(6) : 'pleasanton';
-  const city = data.cities.find((item) => slugify(item.name) === requested) || data.cities.find((item) => item.name === 'Pleasanton');
-  if (city) renderCity(city, data.meta, location.hash.startsWith('#city='));
+  results.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-geoid]');
+    if (!button) return;
+    const city = state.data.cities.find((item) => item.geoid === button.dataset.geoid);
+    input.value = mode === 'primary' ? city.name : '';
+    results.hidden = true;
+    if (mode === 'primary') selectCity(city);
+    else addCompare(city);
+  });
+}
+
+function qualityBadge(city) {
+  return `<span class="status ${city.coverage.status}"><i></i>${coverageLabel(city.coverage.status)}</span>`;
+}
+
+function sparkline(city) {
+  const points = city.timeline;
+  const width = 720, height = 180, pad = 8;
+  const max = Math.max(city.capacityMw, 1);
+  const coords = points.map((point, index) => [pad + index / (points.length - 1) * (width - pad * 2), height - pad - point.mw / max * (height - pad * 2)]);
+  const line = coords.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Approval-date proxy for cumulative capacity from 2001 to 2026"><defs><linearGradient id="sun-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaa72c" stop-opacity=".35"/><stop offset="1" stop-color="#eaa72c" stop-opacity="0"/></linearGradient></defs><path class="area" d="${line} L${coords.at(-1)[0]},${height} L${coords[0][0]},${height} Z"/><path class="line" d="${line}"/></svg><div class="chart-axis"><span>2001</span><span>Approval-date proxy</span><span>2026</span></div>`;
+}
+
+function sectorRows(city) {
+  const max = Math.max(...Object.values(city.sectors).map((sector) => sector.mw), 1);
+  return Object.entries(city.sectors).map(([name, sector]) => `<div class="sector-row"><span>${name}</span><div><i style="width:${sector.mw / max * 100}%"></i></div><strong>${format.format(sector.mw)} MW</strong><small>${integer.format(sector.projects)} sites</small></div>`).join('');
+}
+
+function cityCsv(city) {
+  const rows = [['field', 'value'], ['city', city.name], ['county', city.county], ['reported_capacity_mw_dc', city.capacityMw], ['effective_capacity_mw_dc', city.effectiveCapacityMw], ['generation_low_gwh', city.generationGwh.low], ['generation_high_gwh', city.generationGwh.high], ['climate_zone', city.climateZone], ['yield_low_kwh_per_kw', city.yieldRange[0]], ['yield_high_kwh_per_kw', city.yieldRange[1]], ['population', city.population || ''], ['watts_per_person', city.wattsPerPerson ?? ''], ['projects', city.projects], ['storage_projects', city.storageProjects], ['coverage', city.coverage.status]];
+  return rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
+}
+
+function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
+  state.city = city;
+  const share = solarShare(city);
+  const shareLow = city.load ? city.generationGwh.low / (city.load.highDeliveriesGwh + city.generationGwh.low) * 100 : null;
+  const shareHigh = city.load ? city.generationGwh.high / (city.load.lowDeliveriesGwh + city.generationGwh.high) * 100 : null;
+  const view = document.querySelector('#city-view');
+  view.innerHTML = `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · CEC climate zone ${city.climateZone || 'unassigned'}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}<button data-action="share">Share</button><button data-action="csv">Download CSV</button></div></div>
+    <div class="coverage-note ${city.coverage.status}"><strong>${city.coverage.status === 'partial' ? 'Treat this capacity as a lower bound.' : 'Coverage note'}</strong><span>${escapeHtml(city.coverage.note)}</span><button data-action="limits" aria-label="Read all data limitations">?</button></div>
+    <div class="metrics four"><article><span>Reported capacity</span><strong>${format.format(city.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(city.projects)} current project sites</p></article><article><span>Climate-adjusted generation</span><strong>${format.format(city.generationGwh.low)}–${format.format(city.generationGwh.high)} <small>GWh/yr</small></strong><p>${city.yieldRange.join('–')} kWh/kW · degradation applied</p></article><article><span>Capacity per resident</span><strong>${city.wattsPerPerson == null ? 'Unavailable' : `${format.format(city.wattsPerPerson)} <small>W/person</small>`}</strong><p>${city.population ? `${integer.format(city.population)} residents · 2026 DOF` : 'Population not matched'}</p></article><article><span>Share of city electricity use</span>${share == null ? '<strong class="not-available">Not available</strong><p>No verified city load denominator</p>' : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
+    <div class="detail-grid"><article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative MW-DC by approval date</h3></div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}</article><aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${city.generationGwh.low}</b><b>${city.generationGwh.high} GWh</b></div><p>Zone ${city.climateZone} uses ${city.yieldRange[0]}–${city.yieldRange[1]} kWh/kW-DC-year. Vintage-adjusted effective capacity is ${format.format(city.effectiveCapacityMw)} MW after 0.5% annual degradation.</p></aside></div>
+    <div class="attributes"><article><div class="panel-head"><div><span>Customer mix</span><h3>Capacity by sector</h3></div></div>${sectorRows(city)}</article><article><div class="panel-head"><div><span>System profile</span><h3>What is connected</h3></div></div><dl><div><dt>Average system</dt><dd>${format.format(city.averageSystemKw)} kW</dd></div><div><dt>Storage-linked sites</dt><dd>${integer.format(city.storageProjects)}</dd></div><div><dt>Reported storage</dt><dd>${format.format(city.storageMwh)} MWh</dd></div><div><dt>Source utilities</dt><dd>${city.utilities.length ? city.utilities.join(', ') : 'None matched'}</dd></div></dl></article></div>
+    <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>Positive System Size DC values only; CEC-AC values are not mixed into totals.</p><span>History quality</span><p>Approval-date proxy; superseded applications can shift apparent installation timing.</p>${city.load ? `<span>Load source</span><p><a href="${city.load.sourceUrl}" target="_blank" rel="noreferrer">${escapeHtml(city.load.sourceName)} ↗</a> — ${escapeHtml(city.load.note)}</p>` : ''}</div>`;
+  document.querySelector('#city-search').value = city.name;
+  const url = new URL(location.href); url.searchParams.set('city', slugify(city.name));
+  if (historyMode === 'push') history.pushState({ city: city.geoid }, '', url);
+  else history.replaceState({ city: city.geoid }, '', url);
+  if (scroll) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderMap() {
+  const config = metricConfig[state.mapMetric];
+  const cities = state.data.cities.filter((city) => city.coordinates && Number.isFinite(config.value(city)) && config.value(city) > 0);
+  const values = cities.map(config.value);
+  const sorted = [...values].sort((a, b) => a - b);
+  const cap = sorted[Math.floor(sorted.length * .95)] || 1;
+  const paths = cities.map((city) => {
+    const path = state.boundaries[city.geoid]; if (!path) return '';
+    const ratio = Math.min(config.value(city) / cap, 1); const lightness = 91 - ratio * 43;
+    return `<path class="map-city ${city.coverage.status}" style="fill:hsl(39 78% ${lightness}%)" d="${path}" data-geoid="${city.geoid}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${config.display(config.value(city))}"><title>${escapeHtml(city.name)} · ${config.display(config.value(city))} · ${coverageLabel(city.coverage.status)}</title></path>`;
+  }).join('');
+  document.querySelector('#solar-map').innerHTML = `<svg viewBox="0 0 520 650" role="img" aria-label="California incorporated cities shaded by ${config.label}"><path class="state-outline" d="M28 13L236 13L236 204L490 459L486 603L372 615L307 522L213 494L118 325Z"/>${paths}</svg>`;
+  const summaryCities = state.mapMetric === 'wattsPerPerson' ? cities.filter((city) => city.population >= 10_000) : cities;
+  const top = [...summaryCities].sort((a, b) => config.value(b) - config.value(a)).slice(0, 5);
+  document.querySelector('#map-summary').innerHTML = `<span>Highest ${config.label.toLowerCase()}${state.mapMetric === 'wattsPerPerson' ? ' · population 10,000+' : ''}</span>${top.map((city, index) => `<button data-geoid="${city.geoid}"><i>${index + 1}</i><span>${escapeHtml(city.name)}<small>${escapeHtml(city.county)} County</small></span><strong>${config.display(config.value(city))}</strong></button>`).join('')}<p>Official polygons; shading uses service-city aggregates. Empty municipal polygons have no comparable value.</p>`;
+}
+
+function renderRankings() {
+  const config = metricConfig[state.rankMetric];
+  const excludePartial = document.querySelector('#exclude-partial')?.checked;
+  const minimumPopulation = document.querySelector('#minimum-population')?.checked;
+  const ranked = state.data.cities.filter((city) => Number.isFinite(config.value(city)) && (!excludePartial || city.coverage.status !== 'partial') && (!minimumPopulation || city.population >= 10_000)).sort((a, b) => config.value(b) - config.value(a)).slice(0, 20);
+  const max = config.value(ranked[0]) || 1;
+  document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${ranked.map((city, index) => `<button data-geoid="${city.geoid}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><i style="width:${config.value(city) / max * 100}%"></i><b>${config.display(config.value(city))}</b></span>${qualityBadge(city)}</button>`).join('')}`;
+}
+
+function addCompare(city) {
+  if (state.compare.length >= 4 || state.compare.includes(city)) return;
+  state.compare.push(city); renderCompare();
+}
+
+function renderCompare() {
+  document.querySelector('.compare-count').textContent = `${state.compare.length} / 4`;
+  if (!state.compare.length) { document.querySelector('#compare-view').innerHTML = '<div class="compare-empty">Search above to add cities to this comparison.</div>'; return; }
+  const metrics = [['capacityMw', 'Reported capacity', 'MW'], ['wattsPerPerson', 'Per resident', 'W/person'], ['generation', 'Generation midpoint', 'GWh'], ['growth5yPct', 'Five-year growth', '%']];
+  document.querySelector('#compare-view').innerHTML = `<div class="compare-chips">${state.compare.map((city) => `<button data-remove="${city.geoid}">${escapeHtml(city.name)} <span aria-hidden="true">×</span><span class="sr-only">Remove</span></button>`).join('')}</div><div class="compare-grid">${state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${city.geoid}" aria-label="Remove ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${city.climateZone}</p>${metrics.map(([metric, label, unit]) => { const value = metric === 'generation' ? generationMid(city) : city[metric]; const max = Math.max(...state.compare.map((item) => metric === 'generation' ? generationMid(item) : item[metric] || 0), 1); return `<div class="compare-metric"><span>${label}</span><strong>${value == null ? '—' : `${format.format(value)} ${unit}`}</strong><i style="width:${(value || 0) / max * 100}%"></i></div>`; }).join('')}<button class="text-button" data-geoid="${city.geoid}">View city →</button></article>`).join('')}</div>`;
+}
+
+function download(name, content, type = 'text/csv') {
+  const anchor = document.createElement('a'); anchor.href = URL.createObjectURL(new Blob([content], { type })); anchor.download = name; anchor.click(); URL.revokeObjectURL(anchor.href);
+}
+
+function toast(message) {
+  const element = document.querySelector('#toast'); element.textContent = message; element.classList.add('show'); clearTimeout(toast.timer); toast.timer = setTimeout(() => element.classList.remove('show'), 2600);
+}
+
+function bindEvents() {
+  setupSearch(document.querySelector('[data-search="primary"]'), 'primary');
+  setupSearch(document.querySelector('[data-search="compare"]'), 'compare');
+  document.addEventListener('click', async (event) => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (action === 'limits') document.querySelector('.limits-dialog').showModal();
+    if (action === 'csv') download(`${slugify(state.city.name)}-solar-data.csv`, cityCsv(state.city));
+    if (action === 'chart') {
+      const chart = document.querySelector('.trend-panel .chart').cloneNode(true);
+      chart.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      chart.insertAdjacentHTML('afterbegin', `<title>${escapeHtml(state.city.name)} reported solar capacity by approval year</title><rect width="100%" height="100%" fill="#17372f"/>`);
+      download(`${slugify(state.city.name)}-capacity-history.svg`, new XMLSerializer().serializeToString(chart), 'image/svg+xml');
+    }
+    if (action === 'share') {
+      const payload = { title: `${state.city.name} solar data`, text: `Explore reported distributed solar in ${state.city.name}, California.`, url: location.href };
+      if (navigator.share) await navigator.share(payload).catch(() => {}); else { await navigator.clipboard.writeText(location.href); toast('City link copied'); }
+    }
+    const target = event.target.closest('[data-geoid]');
+    if (target && !target.closest('.search-results')) { const city = state.data.cities.find((item) => item.geoid === target.dataset.geoid); if (city) selectCity(city); }
+    const remove = event.target.closest('[data-remove]');
+    if (remove) { state.compare = state.compare.filter((city) => city.geoid !== remove.dataset.remove); renderCompare(); }
+  });
+  document.querySelector('.limits-dialog').addEventListener('click', (event) => { if (event.target.matches('dialog')) event.target.close(); });
+  document.querySelector('#map-metric').addEventListener('change', (event) => { state.mapMetric = event.target.value; renderMap(); });
+  document.querySelector('#rank-metric').addEventListener('change', (event) => { state.rankMetric = event.target.value; renderRankings(); });
+  document.querySelector('#exclude-partial').addEventListener('change', renderRankings);
+  document.querySelector('#minimum-population').addEventListener('change', renderRankings);
+  document.addEventListener('keydown', (event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); document.querySelector('#city-search').focus(); } });
+  document.addEventListener('click', (event) => { if (!event.target.closest('.search-wrap')) document.querySelectorAll('.search-results').forEach((result) => { result.hidden = true; }); });
+  addEventListener('popstate', () => { const requested = new URL(location.href).searchParams.get('city'); const city = state.data.cities.find((item) => slugify(item.name) === requested); if (city) selectCity(city, { scroll: false, historyMode: 'replace' }); });
 }
 
 async function start() {
   try {
-    const response = await fetch(DATA_URL);
-    if (!response.ok) throw new Error(`Data request failed (${response.status})`);
-    const data = await response.json();
-    renderShell(data.meta);
-    initSearch(data);
-  } catch (error) {
-    app.innerHTML = `<main class="error"><p class="eyebrow">California Solar Atlas</p><h1>The data could not be loaded.</h1><p>${escapeHtml(error.message)}</p><button onclick="location.reload()">Try again</button></main>`;
-  }
+    const [dataResponse, boundaryResponse] = await Promise.all([fetch(DATA_URL), fetch(BOUNDARIES_URL)]); if (!dataResponse.ok) throw new Error(`Data request failed (${dataResponse.status})`);
+    state.data = await dataResponse.json(); state.boundaries = boundaryResponse.ok ? await boundaryResponse.json() : {}; shell(state.data.meta); bindEvents(); renderMap(); renderRankings();
+    const requested = new URL(location.href).searchParams.get('city');
+    const city = state.data.cities.find((item) => slugify(item.name) === requested) || state.data.cities.find((item) => item.name === 'Chula Vista');
+    selectCity(city, { scroll: false, historyMode: 'replace' }); state.compare = [city, state.data.cities.find((item) => item.name === 'Pleasanton')].filter(Boolean); renderCompare();
+  } catch (error) { app.innerHTML = `<main class="error"><p class="eyebrow">California Solar Atlas</p><h1>The data could not be loaded.</h1><p>${escapeHtml(error.message)}</p><button type="button" data-reload>Try again</button></main>`; document.querySelector('[data-reload]').addEventListener('click', () => location.reload()); }
 }
 
 start();

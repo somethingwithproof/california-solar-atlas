@@ -1,0 +1,14 @@
+{
+  "partialCities": [
+    "Alameda", "Anaheim", "Azusa", "Banning", "Biggs", "Burbank", "Cerritos", "Coachella", "Colton", "Glendale", "Gridley", "Healdsburg", "Lodi", "Lompoc", "Los Angeles", "Modesto", "Palo Alto", "Pasadena", "Redding", "Riverside", "Roseville", "Sacramento", "Santa Clara", "Shasta Lake", "Ukiah", "Vernon"
+  ],
+  "notes": {
+    "LOSANGELES": "LADWP projects are outside the three-IOU source files; this total reflects only reported SCE/SDG&E/PG&E records and is a substantial lower bound.",
+    "SACRAMENTO": "SMUD projects are outside the three-IOU source files; this total is a substantial lower bound.",
+    "SANTACLARA": "Silicon Valley Power projects are outside the three-IOU source files; this total is a lower bound.",
+    "PALOALTO": "City of Palo Alto Utilities projects are outside the three-IOU source files; this total is a lower bound."
+  },
+  "defaultPartialNote": "This city has a publicly owned or municipal utility not represented in the PG&E, SCE, and SDG&E files; reported capacity is a lower bound.",
+  "defaultReportedNote": "Projects were found in the PG&E, SCE, or SDG&E source files. Service-city grouping can still differ from legal boundaries.",
+  "defaultUnverifiedNote": "No matching photovoltaic projects were found. This can mean zero reported capacity, a service-city mismatch, or utility coverage outside the source files."
+}

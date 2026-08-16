@@ -1,0 +1,12 @@
+{
+  "PLEASANTON": {
+    "kind": "modeled",
+    "year": 2026,
+    "deliveriesGwh": 543,
+    "lowDeliveriesGwh": 515,
+    "highDeliveriesGwh": 580,
+    "note": "Modeled from Pleasanton's 2017 community inventory baseline with a 5–15% gross-load growth band; replace when a newer utility city disclosure is available.",
+    "sourceName": "Pleasanton CAP 2.0 baseline",
+    "sourceUrl": "https://www.cityofpleasantonca.gov/our-government/public-works/climate-action-plan/"
+  }
+}

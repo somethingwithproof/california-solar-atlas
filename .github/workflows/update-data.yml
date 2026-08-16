@@ -1,0 +1,56 @@
+name: Propose statewide data refresh
+
+on:
+  schedule:
+    - cron: "23 10 15 * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Download authoritative sources
+        run: |
+          curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/csv?layers=2' --output /tmp/ca-cities.csv
+          curl --fail --location --retry 3 'https://www.californiadgstats.ca.gov/download/interconnection_rule21_projects/' --output /tmp/ca-dg-projects.zip
+          curl --fail --location --retry 3 'https://dof.ca.gov/media/docs/forecasting/Demographics/estimates-e1/E-1_2026_InternetVersion.xlsx' --output /tmp/ca-population-2026.xlsx
+          curl --fail --location --retry 3 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_gaz_place_06.txt' --output /tmp/ca-place-gazetteer.txt
+          curl --fail --location --retry 3 'https://services3.arcgis.com/bWPjFyq029ChCGur/arcgis/rest/services/BuildingClimateZones_CEC_2015/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson' --output /tmp/ca-climate-zones.geojson
+          for attempt in 1 2 3 4 5 6; do
+            curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/geojson?layers=2' --output /tmp/ca-city-boundaries.geojson
+            if jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null 2>&1; then break; fi
+            sleep 20
+          done
+          jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null
+      - name: Aggregate and validate
+        run: |
+          npm run data:build
+          npm run data:boundaries
+          npm test
+          npm run build
+      - name: Open reviewable update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- public/data/cities.json public/data/boundaries.json; then
+            echo 'No source changes detected.'
+            exit 0
+          fi
+          branch="data-refresh-$(date -u +%Y%m%d)"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$branch"
+          git add public/data/cities.json public/data/boundaries.json
+          git commit -m 'Refresh statewide solar data'
+          git push --set-upstream origin "$branch"
+          gh pr create --title 'Refresh statewide solar data' --body 'Automated source refresh. Validation and production build passed. Review capacity deltas, coverage flags, and source vintage before merging.' --base main --head "$branch"
