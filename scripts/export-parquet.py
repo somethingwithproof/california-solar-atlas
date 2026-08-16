@@ -13,6 +13,10 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from parquet_schema import CITY_SCHEMA, CITY_TIMELINE_SCHEMA, COUNTY_SCHEMA, COUNTY_TIMELINE_SCHEMA
+
+MAX_INPUT_BYTES = 25_000_000
+
 
 def put(target: dict[str, object], key: str, value: object) -> None:
     """Assign a flattened value without allowing ambiguous key collisions."""
@@ -60,12 +64,36 @@ def validate_payload(payload: object) -> dict[str, Any]:
         require_keys(city, {"id", "name", "timeline", "utilities"}, f"city[{index}]")
         if not isinstance(city["timeline"], list) or not isinstance(city["utilities"], list):
             raise ValueError(f"city[{index}] timeline/utilities must be arrays")
+        if not isinstance(city["id"], str) or not city["id"] or not isinstance(city["name"], str) or not city["name"]:
+            raise ValueError(f"city[{index}] id/name must be non-empty strings")
+        if not all(isinstance(utility, str) for utility in city["utilities"]):
+            raise ValueError(f"city[{index}] utilities must contain only strings")
+        if not 0 < len(city["timeline"]) <= 200:
+            raise ValueError(f"city[{index}] timeline must contain 1–200 points")
+        for point_index, point in enumerate(city["timeline"]):
+            if not isinstance(point, dict) or not {"year", "mw", "addedMw", "projects"} <= point.keys():
+                raise ValueError(f"city[{index}].timeline[{point_index}] is malformed")
     for index, county in enumerate(payload["counties"]):
         if not isinstance(county, dict):
             raise ValueError(f"county[{index}] must be an object")
         require_keys(county, {"slug", "name", "timeline", "allUtilityBenchmark"}, f"county[{index}]")
         if not isinstance(county["timeline"], list):
             raise ValueError(f"county[{index}] timeline must be an array")
+        if not isinstance(county["slug"], str) or not county["slug"] or not isinstance(county["name"], str) or not county["name"]:
+            raise ValueError(f"county[{index}] slug/name must be non-empty strings")
+        if not 0 < len(county["timeline"]) <= 200:
+            raise ValueError(f"county[{index}] timeline must contain 1–200 points")
+        for point_index, point in enumerate(county["timeline"]):
+            if not isinstance(point, dict) or not {"year", "mw"} <= point.keys():
+                raise ValueError(f"county[{index}].timeline[{point_index}] is malformed")
+    if len(payload["cities"]) > 1_000 or len(payload["counties"]) > 100:
+        raise ValueError("Entity count exceeds the bounded California dataset contract")
+    city_ids = [city["id"] for city in payload["cities"]]
+    county_ids = [county["slug"] for county in payload["counties"]]
+    if len(set(city_ids)) != len(city_ids):
+        raise ValueError("City IDs must be unique")
+    if len(set(county_ids)) != len(county_ids):
+        raise ValueError("County slugs must be unique")
     return payload
 
 
@@ -79,13 +107,16 @@ def timeline_row(point: object, identity: dict[str, str], context: str) -> dict[
     return {**point, **identity}
 
 
-def write_table(rows: list[dict[str, object]], destination: Path) -> None:
+def write_table(rows: list[dict[str, object]], destination: Path, arrow_schema: pa.Schema) -> None:
     """Write a stable union-of-columns schema with Zstandard compression."""
     if not rows:
         raise ValueError(f"Cannot write empty Parquet table: {destination.name}")
-    columns = sorted({column for row in rows for column in row})
-    normalized = [{column: row.get(column) for column in columns} for row in rows]
-    pq.write_table(pa.Table.from_pylist(normalized), destination, compression="zstd", version="2.6")
+    columns = {column for row in rows for column in row}
+    expected = set(arrow_schema.names)
+    if columns != expected:
+        raise ValueError(f"{destination.name}: schema fields changed; missing={sorted(expected - columns)}, extra={sorted(columns - expected)}")
+    normalized = [{column: row.get(column) for column in arrow_schema.names} for row in rows]
+    pq.write_table(pa.Table.from_pylist(normalized, schema=arrow_schema), destination, compression="zstd", version="2.6")
 
 
 def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path) -> None:
@@ -94,8 +125,7 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
     city_timeline: list[dict[str, object]] = []
     for city in payload["cities"]:
         row: dict[str, object] = {}
-        flatten("", city, row, skipped_lists=frozenset({"timeline", "utilities"}))
-        put(row, "utilities", ", ".join(str(utility) for utility in city["utilities"]))
+        flatten("", city, row, skipped_lists=frozenset({"timeline"}))
         city_rows.append(row)
         city_timeline.extend(timeline_row(point, {"city_id": city["id"], "city": city["name"]}, city["name"]) for point in city["timeline"])
 
@@ -107,13 +137,13 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         county_rows.append(row)
         county_timeline.extend(timeline_row(point, {"county_id": county["slug"], "county": county["name"]}, county["name"]) for point in county["timeline"])
 
-    for filename, rows in {
-        "cities.parquet": city_rows,
-        "city-timeline.parquet": city_timeline,
-        "counties.parquet": county_rows,
-        "county-timeline.parquet": county_timeline,
-    }.items():
-        write_table(rows, destination / filename)
+    for filename, rows, arrow_schema in [
+        ("cities.parquet", city_rows, CITY_SCHEMA),
+        ("city-timeline.parquet", city_timeline, CITY_TIMELINE_SCHEMA),
+        ("counties.parquet", county_rows, COUNTY_SCHEMA),
+        ("county-timeline.parquet", county_timeline, COUNTY_TIMELINE_SCHEMA),
+    ]:
+        write_table(rows, destination / filename, arrow_schema)
 
     (destination / "california-solar-atlas.json").write_bytes(source_bytes)
     metadata = {
@@ -141,24 +171,47 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
     (destination / "SHA256SUMS").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
 
 
+def prepare_output(output: Path) -> None:
+    """Require an absent or empty directory and prepare for an atomic rename."""
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if not output.exists():
+        return
+    if not output.is_dir():
+        raise RuntimeError(f"Output path exists and is not a directory: {output}")
+    if any(output.iterdir()):
+        raise RuntimeError(f"Output directory is not empty: {output}")
+    try:
+        output.rmdir()
+    except OSError as error:
+        raise RuntimeError(f"Could not prepare output directory {output}: {error}") from error
+
+
+def run(input_path: Path, output_path: Path) -> None:
+    """Run a transactional export and present source errors without a traceback."""
+    input_size = input_path.stat().st_size
+    if input_size <= 0 or input_size > MAX_INPUT_BYTES:
+        raise ValueError(f"Input size is outside the 1–{MAX_INPUT_BYTES} byte contract: {input_size}")
+    source_bytes = input_path.read_bytes()
+    payload = validate_payload(json.loads(source_bytes))
+    prepare_output(output_path)
+
+    # Keeping staging under the output parent makes the final rename atomic on one filesystem.
+    with tempfile.TemporaryDirectory(prefix=".atlas-release-", dir=output_path.parent) as temporary:
+        staging = Path(temporary)
+        build_assets(payload, source_bytes, staging)
+        staging.chmod(0o755)
+        staging.replace(output_path)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input", type=Path, default=Path("public/data/cities.json"))
     parser.add_argument("--output", type=Path, default=Path("dist-data"))
     args = parser.parse_args()
-
-    source_bytes = args.input.read_bytes()
-    payload = validate_payload(json.loads(source_bytes))
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    if args.output.exists() and any(args.output.iterdir()):
-        raise RuntimeError(f"Output directory is not empty: {args.output}")
-    if args.output.exists():
-        args.output.rmdir()
-
-    with tempfile.TemporaryDirectory(prefix=".atlas-release-", dir=args.output.parent) as temporary:
-        staging = Path(temporary)
-        build_assets(payload, source_bytes, staging)
-        staging.replace(args.output)
+    try:
+        run(args.input, args.output)
+    except (OSError, RuntimeError, TypeError, ValueError) as error:
+        raise SystemExit(f"Release export failed: {error}") from error
 
 
 if __name__ == "__main__":
