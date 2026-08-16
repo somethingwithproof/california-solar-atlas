@@ -27,6 +27,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_INPUT = PROJECT_ROOT / "public" / "data" / "cities.json"
 CANONICAL_OUTPUT = PROJECT_ROOT / "dist-data"
 RELEASE_MARKER = "metadata.json"
+SOURCE_ASSET = "california-solar-atlas.json"
+CHECKSUM_MANIFEST = "SHA256SUMS"
 
 
 def finite_number(value: object) -> bool:
@@ -247,7 +249,7 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
 
     # The destination is a fixed staging directory and the filename is a literal;
     # validated source bytes cannot influence either path.
-    (destination / "california-solar-atlas.json").write_bytes(source_bytes)  # NOSONAR
+    (destination / SOURCE_ASSET).write_bytes(source_bytes)  # NOSONAR
     metadata = {
         "schemaVersion": payload["meta"]["schemaVersion"],
         "dataThrough": payload["meta"]["dataThrough"],
@@ -260,18 +262,18 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         "countyRows": len(county_rows),
         "cityTimelineRows": len(city_timeline),
         "countyTimelineRows": len(county_timeline),
-        "sourceFile": "california-solar-atlas.json",
+        "sourceFile": SOURCE_ASSET,
         "sourceSha256": hashlib.sha256(source_bytes).hexdigest(),
     }
     # Metadata values affect file contents only; the release path is fixed above.
-    (destination / "metadata.json").write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8")  # NOSONAR
+    (destination / RELEASE_MARKER).write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8")  # NOSONAR
 
     checksum_lines = [
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
         for path in sorted(destination.iterdir())
-        if path.name != "SHA256SUMS"
+        if path.name != CHECKSUM_MANIFEST
     ]
-    (destination / "SHA256SUMS").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
+    (destination / CHECKSUM_MANIFEST).write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
     for asset in destination.iterdir():
         asset.chmod(0o644)
 
@@ -281,15 +283,15 @@ def is_previous_release(output: Path) -> bool:
 
     A stray metadata.json is not proof of ownership, and --replace deletes recursively.
     """
-    if not (output / "SHA256SUMS").is_file():
+    if not (output / CHECKSUM_MANIFEST).is_file():
         return False
     try:
         metadata = json.loads((output / RELEASE_MARKER).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return False
-    if not isinstance(metadata, dict) or metadata.get("sourceFile") != "california-solar-atlas.json":
+    if not isinstance(metadata, dict) or metadata.get("sourceFile") != SOURCE_ASSET:
         return False
-    expected = {"california-solar-atlas.json", "metadata.json", "SHA256SUMS", "cities.parquet",
+    expected = {SOURCE_ASSET, RELEASE_MARKER, CHECKSUM_MANIFEST, "cities.parquet",
                 "counties.parquet", "city-timeline.parquet", "county-timeline.parquet"}
     return expected.issubset({entry.name for entry in output.iterdir()})
 

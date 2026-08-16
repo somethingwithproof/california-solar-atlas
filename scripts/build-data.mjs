@@ -417,11 +417,12 @@ const records = [...uniqueCities.values()].map((city) => {
   return record;
 }).sort((a, b) => a.name.localeCompare(b.name));
 
-const appliedUtilities = new Set(records.filter((city) => city.pouCapacity).map((city) => city.pouCapacity.utility));
-if (appliedUtilities.size !== pouMerged.size) {
-  const applied = new Set([...pouMerged.values()].filter((pou) => appliedUtilities.has(pou.utility)).map((pou) => pou.utility));
-  const stranded = [...pouMerged.values()].map((pou) => pou.utility).filter((name) => !applied.has(name));
-  throw new Error(`Municipal capacity was never applied to a city record for: ${stranded.join(', ')}`);
+// Compared on city keys, not utility names: two registry entries sharing an eiaName
+// would leave a name-based difference empty and report a failure naming nothing.
+const appliedCityKeys = new Set(records.filter((city) => city.pouCapacity).map((city) => key(city.name)));
+if (appliedCityKeys.size !== pouMerged.size) {
+  const stranded = [...pouMerged.entries()].filter(([cityKey]) => !appliedCityKeys.has(cityKey)).map(([, pou]) => pou.utility);
+  throw new Error(`Municipal capacity was never applied to a city record for: ${stranded.join(', ') || 'an unidentified entry; check for duplicate eiaName values'}`);
 }
 
 const counties = [...countyAggregates.values()].sort((a, b) => a.name.localeCompare(b.name)).map((county) => {

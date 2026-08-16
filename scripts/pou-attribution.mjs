@@ -59,7 +59,7 @@ function mergedRecord(entry, reported, pair, band, year) {
 
 // Throws rather than returning a partial answer: every failure here is silent
 // under-attribution, which no downstream reconciliation can detect.
-function checkDecision(entry, reported, pair, pouAttribution, repairedAreaPct = {}) {
+function checkDecision(entry, reported, pair, pouAttribution, repairs = {}) {
   if (!reported) throw new Error(`${entry.eiaName}: no EIA-861 capacity row; refresh data/pou-inputs.json`);
   if (entry.decision === 'excluded') return;
   if (!pair) throw new Error(`${entry.eiaName}: no measured overlap for ${entry.territoryName} against ${entry.city}`);
@@ -72,15 +72,16 @@ function checkDecision(entry, reported, pair, pouAttribution, repairedAreaPct = 
     }
   }
   if (entry.decision === 'rule') {
-    // A repaired territory has a shrunken denominator, so its percentage reads higher
-    // than the real shape. An automatic merge must not rest on that; a reviewed
-    // override may, because a human weighed the territory.
-    const repaired = repairedAreaPct[entry.territoryName];
-    if (repaired) {
-      throw new Error(`${entry.eiaName}: ${entry.territoryName} needed a geometry repair that moved ${repaired}% of its area, so its overlap is unreliable; review it and use an override`);
-    }
     if (pair.territoryInCityPct < pouAttribution.mergeThresholdPct) {
       throw new Error(`${entry.eiaName}: ${pair.territoryInCityPct}% is below the ${pouAttribution.mergeThresholdPct}% merge rule; use an override with a reason`);
+    }
+    // territoryInCityPct = intersection(territory, city) / territory. A repair to the
+    // territory moves the denominator and a repair to the city moves the numerator, so
+    // both can inflate the ratio. Allow the merge only when the measured margin above
+    // the threshold still survives the worst case those repairs could account for.
+    const distortion = (repairs.territory?.[entry.territoryName] ?? 0) + (repairs.city?.[entry.city] ?? 0);
+    if (distortion > 0 && pair.territoryInCityPct - distortion < pouAttribution.mergeThresholdPct) {
+      throw new Error(`${entry.eiaName}: geometry repairs could move the overlap by ${distortion.toFixed(2)} points, which is more than its ${(pair.territoryInCityPct - pouAttribution.mergeThresholdPct).toFixed(2)}-point margin; review it and use an override`);
     }
   }
   if (entry.decision === 'override' && !entry.reason) throw new Error(`${entry.eiaName}: an override requires a reason`);
@@ -90,6 +91,10 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
   const band = conversionBand(pouAttribution);
   const capacity = new Map(pouInputs.netMetering.utilities.map((utility) => [utility.utility, utility]));
   const overlap = new Map(pouInputs.territoryOverlap.pairs.map((pair) => [overlapKey(pair.utility, pair.city), pair]));
+  const repairs = {
+    territory: pouInputs.territoryOverlap.repairedTerritoryAreaPct ?? {},
+    city: pouInputs.territoryOverlap.repairedCityAreaPct ?? {}
+  };
   const merged = new Map();
   const excluded = [];
 
@@ -100,7 +105,7 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
     }
     const reported = capacity.get(entry.eiaName);
     const pair = overlap.get(overlapKey(entry.territoryName, entry.city));
-    checkDecision(entry, reported, pair, pouAttribution, pouInputs.territoryOverlap.repairedTerritoryAreaPct ?? {});
+    checkDecision(entry, reported, pair, pouAttribution, repairs);
 
     if (entry.decision === 'excluded') {
       // Carries the same conversion the merged path uses, or a later sum over these

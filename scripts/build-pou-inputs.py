@@ -271,37 +271,45 @@ def _cities(boundaries: Path, to_albers) -> tuple[dict[str, object], dict[str, s
     return cities, geoids
 
 
-def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dict[str, object]]:
+def _pairs_for(utility: str, territory, cities: dict, geoids: dict, minimum_pct: float) -> list[dict[str, object]]:
+    """Measure one territory against every city, keeping pairs above the floor."""
+    window = prep(territory)
+    rows = []
+    for city, polygon in cities.items():
+        if polygon.is_empty or polygon.area <= 0 or not window.intersects(polygon):
+            continue
+        shared = territory.intersection(polygon).area
+        if shared <= 0:
+            continue
+        territory_in_city = shared / territory.area * 100
+        city_covered = shared / polygon.area * 100
+        if territory_in_city > 100.01 or city_covered > 100.01:
+            raise SystemExit(f"{utility} / {city}: overlap exceeds 100%, indicating a CRS or geometry defect")
+        if territory_in_city < minimum_pct and city_covered < minimum_pct:
+            continue
+        rows.append({
+            "utility": utility,
+            "city": city,
+            "geoid": geoids.get(city) or None,
+            "cityCoveredPct": round(city_covered, 1),
+            "territoryInCityPct": round(territory_in_city, 1),
+        })
+    return rows
+
+
+def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> tuple[list[dict[str, object]], dict[str, float], dict[str, float]]:
     """Measure each utility territory against every city polygon in equal-area space."""
     territory_repairs: dict[str, float] = {}
     city_repairs: dict[str, float] = {}
     territories = _territories(lse_bytes, _albers(territory_repairs))
     cities, geoids = _cities(boundaries, _albers(city_repairs))
 
-    rows = []
-    for utility, territory in territories.items():
-        if territory.is_empty or territory.area <= 0:
-            continue
-        window = prep(territory)
-        for city, polygon in cities.items():
-            if polygon.is_empty or polygon.area <= 0 or not window.intersects(polygon):
-                continue
-            shared = territory.intersection(polygon).area
-            if shared <= 0:
-                continue
-            territory_in_city = shared / territory.area * 100
-            city_covered = shared / polygon.area * 100
-            if territory_in_city > 100.01 or city_covered > 100.01:
-                raise SystemExit(f"{utility} / {city}: overlap exceeds 100%, indicating a CRS or geometry defect")
-            if territory_in_city < minimum_pct and city_covered < minimum_pct:
-                continue
-            rows.append({
-                "utility": utility,
-                "city": city,
-                "geoid": geoids.get(city) or None,
-                "cityCoveredPct": round(city_covered, 1),
-                "territoryInCityPct": round(territory_in_city, 1),
-            })
+    rows = [
+        row
+        for utility, territory in territories.items()
+        if not (territory.is_empty or territory.area <= 0)
+        for row in _pairs_for(utility, territory, cities, geoids, minimum_pct)
+    ]
     return sorted(rows, key=lambda row: (row["utility"], -row["territoryInCityPct"])), territory_repairs, city_repairs
 
 
@@ -341,9 +349,10 @@ def main() -> None:
             "sourceUrl": LSE_ABOUT,
             "sourceSha256": hashlib.sha256(lse).hexdigest(),
             "pairs": overlap_pairs,
-            # Percent of area a buffer(0) repair moved. Only the territory denominator
-            # gates a merge, so the two are kept apart; build-data.mjs refuses a rule
-            # merge on a repaired territory.
+            # Percent of area a buffer(0) repair moved. The territory is the ratio's
+            # denominator and the city is its numerator, so either can inflate the
+            # overlap; build-data.mjs weighs both against the merge margin. Kept apart
+            # because a city can share a name with a territoryName.
             "repairedTerritoryAreaPct": repaired_territories,
             "repairedCityAreaPct": repaired_cities,
         },

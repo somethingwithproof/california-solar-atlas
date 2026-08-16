@@ -206,17 +206,37 @@ test('a non-numeric overlap measurement is refused rather than merging unconditi
   }
 });
 
-test('a rule merge is refused when the territory needed a geometry repair', () => {
-  const entry = { eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' };
-  const data = () => {
-    const base = inputs({ pairs: [pair('Testville Electric', 'Testville', 99)] });
-    // A repaired territory has a shrunken denominator, so 99% reads higher than truth.
-    base.territoryOverlap.repairedTerritoryAreaPct = { 'Testville Electric': 4.2 };
-    return base;
-  };
-  assert.throws(() => pouByCity(data(), attribution([entry]), cityKey), /needed a geometry repair/);
+const entryFor = (decision, extra = {}) => ({ eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision, ...extra });
 
-  // A reviewed override may still merge: a human weighed the territory.
-  const { merged } = pouByCity(data(), attribution([{ ...entry, decision: 'override', reason: 'reviewed against the utility map' }]), cityKey);
+function repairedInputs(pct, repairs) {
+  const base = inputs({ pairs: [pair('Testville Electric', 'Testville', pct)] });
+  Object.assign(base.territoryOverlap, repairs);
+  return base;
+}
+
+test('a repair larger than the merge margin refuses an automatic merge', () => {
+  // 96% is one point above the 95% threshold, so a 4.2-point distortion could have
+  // carried it over. The territory is the ratio's denominator.
+  assert.throws(() => pouByCity(repairedInputs(96, { repairedTerritoryAreaPct: { 'Testville Electric': 4.2 } }), attribution([entryFor('rule')]), cityKey),
+    /geometry repairs could move the overlap/);
+
+  // The city is the ratio's numerator and must be weighed the same way.
+  assert.throws(() => pouByCity(repairedInputs(96, { repairedCityAreaPct: { Testville: 4.2 } }), attribution([entryFor('rule')]), cityKey),
+    /geometry repairs could move the overlap/);
+
+  // Both operands repaired: the distortions add.
+  assert.throws(() => pouByCity(repairedInputs(97, { repairedTerritoryAreaPct: { 'Testville Electric': 1.5 }, repairedCityAreaPct: { Testville: 1.5 } }), attribution([entryFor('rule')]), cityKey),
+    /geometry repairs could move the overlap/);
+});
+
+test('a repair well inside the merge margin still merges', () => {
+  // Redding's real case: a 0.66-point city repair against a 99.7% overlap.
+  const { merged } = pouByCity(repairedInputs(99.7, { repairedCityAreaPct: { Testville: 0.66 } }), attribution([entryFor('rule')]), cityKey);
+  assert.equal(merged.get('TESTVILLE').method, 'territory-contained');
+});
+
+test('a reviewed override may merge on a repaired geometry', () => {
+  const { merged } = pouByCity(repairedInputs(96, { repairedTerritoryAreaPct: { 'Testville Electric': 4.2 } }),
+    attribution([entryFor('override', { reason: 'reviewed against the utility map' })]), cityKey);
   assert.equal(merged.get('TESTVILLE').method, 'reviewed-override');
 });
