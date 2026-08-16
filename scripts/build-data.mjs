@@ -383,6 +383,11 @@ function pouByCity() {
     if (existing) throw new Error(`${entry.city}: two utilities merge into one city (${existing.utility}, ${entry.eiaName})`);
     merged.set(key(entry.city), record);
   }
+  // Every utility EIA reports must be a deliberate decision. Without this, next year's
+  // new municipal filer is silently absent instead of merged or explicitly excluded.
+  const decided = new Set(pouAttribution.utilities.map((entry) => entry.eiaName));
+  const undecided = pouInputs.netMetering.utilities.map((utility) => utility.utility).filter((name) => !decided.has(name));
+  if (undecided.length) throw new Error(`EIA reports utilities with no attribution decision: ${undecided.join(', ')}`);
   return { merged, excluded };
 }
 

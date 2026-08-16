@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import json
 import math
 import shutil
@@ -284,11 +285,11 @@ def prepare_output(output: Path, *, replace: bool = False) -> None:
     if any(output.iterdir()):
         if not replace:
             raise RuntimeError(f"Output directory is not empty: {output} (pass --replace to overwrite a previous release)")
-        # Only a directory this exporter wrote may be removed; the marker keeps
-        # --replace from deleting an unrelated path someone pointed the run at.
+        # Only a directory this exporter wrote may be replaced; the marker keeps
+        # --replace from touching an unrelated path someone pointed the run at.
         if not (output / RELEASE_MARKER).is_file():
             raise RuntimeError(f"Refusing to replace {output}: no {RELEASE_MARKER} from a previous release")
-        shutil.rmtree(output)
+        # The existing release stays on disk until the new one is built.
         return
     try:
         output.rmdir()
@@ -312,7 +313,19 @@ def run(input_path: Path, output_path: Path, *, replace: bool = False) -> None:
         staging = Path(temporary)
         build_assets(payload, source_bytes, staging)
         staging.chmod(0o755)
-        staging.replace(output_path)
+        if not output_path.exists():
+            staging.replace(output_path)
+            return
+        # Build first, then swap, then discard. A failure above leaves the previous
+        # release untouched rather than deleting it and then failing.
+        retired = output_path.with_name(f"{output_path.name}.retired-{os.getpid()}")
+        output_path.replace(retired)
+        try:
+            staging.replace(output_path)
+        except BaseException:
+            retired.replace(output_path)
+            raise
+        shutil.rmtree(retired, ignore_errors=True)
 
 
 def main() -> None:

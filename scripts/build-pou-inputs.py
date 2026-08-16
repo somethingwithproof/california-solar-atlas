@@ -66,14 +66,21 @@ def fetch(url: str, destination: Path) -> bytes:
         raise SystemExit(f"Cached source is empty or oversize; delete it and retry: {destination}")
 
     with urlopen(Request(url, headers={"User-Agent": AGENT}), timeout=300) as response:
+        declared = response.headers.get("Content-Length")
         # One byte over the cap distinguishes "at the limit" from "truncated by the cap".
         payload = response.read(MAX_SOURCE_BYTES + 1)
     if not payload:
         raise SystemExit(f"Source returned an empty body: {url}")
     if len(payload) > MAX_SOURCE_BYTES:
         raise SystemExit(f"Source exceeds the {MAX_SOURCE_BYTES} byte contract: {url}")
+    # read() returns short on a mid-transfer close without raising, and the caller
+    # publishes sha256(payload) as provenance, so a partial body must never be kept.
+    if declared is None or not declared.isdigit():
+        raise SystemExit(f"Source did not declare Content-Length, so truncation cannot be ruled out: {url}")
+    if len(payload) != int(declared):
+        raise SystemExit(f"Source truncated: got {len(payload)} of {declared} bytes from {url}")
 
-    # Write through a private temp file so an interrupted run cannot cache a truncation.
+    # Write through a private temp file so an interrupted run cannot cache a partial write.
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     handle, staging = tempfile.mkstemp(dir=destination.parent, prefix=".download-")
     try:
@@ -136,6 +143,10 @@ def net_metering(archive_bytes: bytes) -> list[dict[str, object]]:
             "basis": rating,
             "capacityMw": round(float(megawatts), 3),
         })
+    names = [row["utility"] for row in rows]
+    if len(set(names)) != len(names):
+        duplicates = sorted({name for name in names if names.count(name) > 1})
+        raise SystemExit(f"EIA reports more than one row for: {duplicates}. Decide how to combine them before publishing.")
     return sorted(rows, key=lambda row: -row["capacityMw"])
 
 
@@ -178,11 +189,38 @@ def _territories(lse_bytes: bytes, to_albers) -> dict[str, object]:
     return territories
 
 
+CALIFORNIA_BOUNDS = (-125.0, -113.0, 32.0, 43.0)
+
+
+def _require_wgs84(payload: dict) -> None:
+    """Reject a boundary file that is not already lon/lat inside California."""
+    named = ((payload.get("crs") or {}).get("properties") or {}).get("name", "")
+    if named and not any(marker in named.upper() for marker in ("4326", "CRS84")):
+        raise SystemExit(f"City boundary source must be WGS84 lon/lat, found CRS {named}")
+    west, east, south, north = CALIFORNIA_BOUNDS
+    for feature in payload["features"][:50]:
+        for longitude, latitude in _first_points(feature.get("geometry")):
+            if not (west <= longitude <= east and south <= latitude <= north):
+                raise SystemExit(f"City boundary coordinate {longitude}, {latitude} is outside California; check the CRS")
+
+
+def _first_points(geometry: object, budget: int = 5) -> list[tuple[float, float]]:
+    """Pull a few leaf coordinate pairs without walking an entire polygon."""
+    if not isinstance(geometry, dict):
+        return []
+    node: object = geometry.get("coordinates")
+    while isinstance(node, list) and node and isinstance(node[0], list):
+        node = node[0]
+    return [tuple(node[:2])] if isinstance(node, list) and len(node) >= 2 and all(isinstance(v, (int, float)) for v in node[:2]) else []
+
+
 def _cities(boundaries: Path, to_albers) -> tuple[dict[str, object], dict[str, str]]:
     """Union multi-part city boundaries and keep each city's GEOID."""
+    payload = read_local_json(boundaries, "City boundary source")
+    _require_wgs84(payload)
     cities: dict[str, object] = {}
     geoids: dict[str, str] = {}
-    for feature in read_local_json(boundaries, "City boundary source")["features"]:
+    for feature in payload["features"]:
         properties = feature["properties"]
         city = properties.get("CDTFA_CITY")
         if not city:
@@ -212,6 +250,8 @@ def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dic
                 continue
             territory_in_city = shared / territory.area * 100
             city_covered = shared / polygon.area * 100
+            if territory_in_city > 100.01 or city_covered > 100.01:
+                raise SystemExit(f"{utility} / {city}: overlap exceeds 100%, indicating a CRS or geometry defect")
             if territory_in_city < minimum_pct and city_covered < minimum_pct:
                 continue
             rows.append({
@@ -240,6 +280,9 @@ def main() -> None:
     eia = fetch(EIA_URL, options.cache / f"f861{EIA_YEAR}.zip")
     lse = fetch(LSE_URL, options.cache / "ca-lse-territories.geojson")
 
+    net_metering_rows = net_metering(eia)
+    overlap_pairs = overlaps(lse, options.boundaries, options.min_pct)
+
     payload = {
         "netMetering": {
             "year": EIA_YEAR,
@@ -247,7 +290,7 @@ def main() -> None:
             "sourceName": "Form EIA-861 Net Metering",
             "sourceUrl": "https://www.eia.gov/electricity/data/eia861/",
             "sourceSha256": hashlib.sha256(eia).hexdigest(),
-            "utilities": net_metering(eia),
+            "utilities": net_metering_rows,
         },
         "territoryOverlap": {
             "crs": "EPSG:3310",
@@ -256,12 +299,14 @@ def main() -> None:
             "sourceName": "CEC Electric Load Serving Entities (IOU & POU)",
             "sourceUrl": LSE_ABOUT,
             "sourceSha256": hashlib.sha256(lse).hexdigest(),
-            "pairs": overlaps(lse, options.boundaries, options.min_pct),
+            "pairs": overlap_pairs,
         },
     }
     OUTPUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     counts = (len(payload["netMetering"]["utilities"]), len(payload["territoryOverlap"]["pairs"]))
     sys.stdout.write(f"Wrote {counts[0]} utilities and {counts[1]} territory/city pairs to {OUTPUT}\n")
+    # The EIA-to-CEC name join lives in data/pou-attribution.json, and build-data.mjs
+    # fails closed on a utility with no decision or an unresolvable territory name.
 
 
 if __name__ == "__main__":
