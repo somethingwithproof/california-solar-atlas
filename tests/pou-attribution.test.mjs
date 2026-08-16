@@ -194,3 +194,29 @@ test('an unusable inverter loading ratio is refused rather than zeroing every AC
       `ratio ${JSON.stringify(ratio)} must not reach the conversion`);
   }
 });
+
+test('a non-numeric overlap measurement is refused rather than merging unconditionally', () => {
+  const entry = { eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' };
+  // `undefined < 95` is false, so without a guard this merges instead of being measured.
+  for (const pct of [undefined, null, 'high', NaN, -1, 150]) {
+    assert.throws(() => pouByCity(
+      inputs({ pairs: [{ utility: 'Testville Electric', city: 'Testville', territoryInCityPct: pct, cityCoveredPct: 50 }] }),
+      attribution([entry]), cityKey
+    ), /territoryInCityPct must be a percentage/, `territoryInCityPct ${JSON.stringify(pct)} must not reach the gate`);
+  }
+});
+
+test('a rule merge is refused when the territory needed a geometry repair', () => {
+  const entry = { eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' };
+  const data = () => {
+    const base = inputs({ pairs: [pair('Testville Electric', 'Testville', 99)] });
+    // A repaired territory has a shrunken denominator, so 99% reads higher than truth.
+    base.territoryOverlap.repairedTerritoryAreaPct = { 'Testville Electric': 4.2 };
+    return base;
+  };
+  assert.throws(() => pouByCity(data(), attribution([entry]), cityKey), /needed a geometry repair/);
+
+  // A reviewed override may still merge: a human weighed the territory.
+  const { merged } = pouByCity(data(), attribution([{ ...entry, decision: 'override', reason: 'reviewed against the utility map' }]), cityKey);
+  assert.equal(merged.get('TESTVILLE').method, 'reviewed-override');
+});

@@ -38,6 +38,8 @@ OUTPUT = PROJECT_ROOT / "data" / "pou-inputs.json"
 DEFAULT_CACHE = PROJECT_ROOT / ".pou-cache"
 MAX_SOURCE_BYTES = 200_000_000
 MIN_TERRITORY_FEATURES = 40
+# A repair that moves the area more than this changes the denominator of the merge gate.
+REPAIR_AREA_TOLERANCE = 0.01  # percent; below this a repair cannot move the gate
 
 EIA_YEAR = 2024
 EIA_URL = f"https://www.eia.gov/electricity/data/eia861/zip/f861{EIA_YEAR}.zip"
@@ -191,12 +193,23 @@ def territory_features(lse_bytes: bytes) -> list[dict[str, object]]:
     return features
 
 
-def _albers():
-    """Return a projector into EPSG:3310, the equal-area basis for these ratios."""
+def _albers(repairs: dict[str, float] | None = None):
+    """Return a projector into EPSG:3310, recording any geometry repair that moved area."""
+    repairs = {} if repairs is None else repairs
     project = Transformer.from_crs("EPSG:4326", "EPSG:3310", always_xy=True).transform
 
-    def to_albers(geometry):
-        geometry = geometry if geometry.is_valid else geometry.buffer(0)
+    def to_albers(geometry, label: str = "geometry"):
+        if not geometry.is_valid:
+            # buffer(0) can discard rings or whole parts. territoryInCityPct divides by
+            # the territory area, so a silent shrink inflates the ratio that gates a
+            # merge, and no downstream check can see it. Record the change instead of
+            # hiding it; build-data.mjs refuses a rule merge on a repaired territory.
+            before = geometry.area
+            geometry = geometry.buffer(0)
+            after = geometry.area
+            delta = abs(after - before) / before * 100 if before > 0 else 100.0
+            if delta > REPAIR_AREA_TOLERANCE:
+                repairs[label] = round(delta, 4)
         return transform(project, geometry)
 
     return to_albers
@@ -209,7 +222,7 @@ def _territories(lse_bytes: bytes, to_albers) -> dict[str, object]:
         utility = feature["properties"]["Utility"]
         if not utility or any(marker in utility for marker in IOU_IN_SOURCE):
             continue
-        geometry = to_albers(shape(feature["geometry"]))
+        geometry = to_albers(shape(feature["geometry"]), utility)
         # A utility split across features must union, or its area shrinks and
         # territoryInCityPct inflates past the merge gate.
         territories[utility] = unary_union([territories[utility], geometry]) if utility in territories else geometry
@@ -252,7 +265,7 @@ def _cities(boundaries: Path, to_albers) -> tuple[dict[str, object], dict[str, s
         city = properties.get("CDTFA_CITY")
         if not city:
             continue
-        geometry = to_albers(shape(feature["geometry"]))
+        geometry = to_albers(shape(feature["geometry"]), city)
         cities[city] = unary_union([cities[city], geometry]) if city in cities else geometry
         geoids.setdefault(city, properties.get("CENSUS_GEOID") or "")
     return cities, geoids
@@ -260,9 +273,10 @@ def _cities(boundaries: Path, to_albers) -> tuple[dict[str, object], dict[str, s
 
 def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dict[str, object]]:
     """Measure each utility territory against every city polygon in equal-area space."""
-    to_albers = _albers()
-    territories = _territories(lse_bytes, to_albers)
-    cities, geoids = _cities(boundaries, to_albers)
+    territory_repairs: dict[str, float] = {}
+    city_repairs: dict[str, float] = {}
+    territories = _territories(lse_bytes, _albers(territory_repairs))
+    cities, geoids = _cities(boundaries, _albers(city_repairs))
 
     rows = []
     for utility, territory in territories.items():
@@ -288,7 +302,7 @@ def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dic
                 "cityCoveredPct": round(city_covered, 1),
                 "territoryInCityPct": round(territory_in_city, 1),
             })
-    return sorted(rows, key=lambda row: (row["utility"], -row["territoryInCityPct"]))
+    return sorted(rows, key=lambda row: (row["utility"], -row["territoryInCityPct"])), territory_repairs, city_repairs
 
 
 def main() -> None:
@@ -308,7 +322,7 @@ def main() -> None:
     lse = fetch(LSE_URL, options.cache / "ca-lse-territories.geojson")
 
     net_metering_rows = net_metering(eia)
-    overlap_pairs = overlaps(lse, options.boundaries, options.min_pct)
+    overlap_pairs, repaired_territories, repaired_cities = overlaps(lse, options.boundaries, options.min_pct)
 
     payload = {
         "netMetering": {
@@ -327,6 +341,11 @@ def main() -> None:
             "sourceUrl": LSE_ABOUT,
             "sourceSha256": hashlib.sha256(lse).hexdigest(),
             "pairs": overlap_pairs,
+            # Percent of area a buffer(0) repair moved. Only the territory denominator
+            # gates a merge, so the two are kept apart; build-data.mjs refuses a rule
+            # merge on a repaired territory.
+            "repairedTerritoryAreaPct": repaired_territories,
+            "repairedCityAreaPct": repaired_cities,
         },
     }
     OUTPUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

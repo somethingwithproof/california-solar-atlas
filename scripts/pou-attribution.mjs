@@ -59,12 +59,29 @@ function mergedRecord(entry, reported, pair, band, year) {
 
 // Throws rather than returning a partial answer: every failure here is silent
 // under-attribution, which no downstream reconciliation can detect.
-function checkDecision(entry, reported, pair, pouAttribution) {
+function checkDecision(entry, reported, pair, pouAttribution, repairedAreaPct = {}) {
   if (!reported) throw new Error(`${entry.eiaName}: no EIA-861 capacity row; refresh data/pou-inputs.json`);
   if (entry.decision === 'excluded') return;
   if (!pair) throw new Error(`${entry.eiaName}: no measured overlap for ${entry.territoryName} against ${entry.city}`);
-  if (entry.decision === 'rule' && pair.territoryInCityPct < pouAttribution.mergeThresholdPct) {
-    throw new Error(`${entry.eiaName}: ${pair.territoryInCityPct}% is below the ${pouAttribution.mergeThresholdPct}% merge rule; use an override with a reason`);
+  // Both operands of the merge gate must be numbers. A non-numeric measurement makes
+  // `pct < threshold` false, which merges unconditionally and fails toward
+  // over-attribution: the opposite direction from every other guard here.
+  for (const field of ['territoryInCityPct', 'cityCoveredPct']) {
+    if (!Number.isFinite(pair[field]) || pair[field] < 0 || pair[field] > 100.01) {
+      throw new TypeError(`${entry.eiaName}: ${field} must be a percentage between 0 and 100, found ${JSON.stringify(pair[field])}`);
+    }
+  }
+  if (entry.decision === 'rule') {
+    // A repaired territory has a shrunken denominator, so its percentage reads higher
+    // than the real shape. An automatic merge must not rest on that; a reviewed
+    // override may, because a human weighed the territory.
+    const repaired = repairedAreaPct[entry.territoryName];
+    if (repaired) {
+      throw new Error(`${entry.eiaName}: ${entry.territoryName} needed a geometry repair that moved ${repaired}% of its area, so its overlap is unreliable; review it and use an override`);
+    }
+    if (pair.territoryInCityPct < pouAttribution.mergeThresholdPct) {
+      throw new Error(`${entry.eiaName}: ${pair.territoryInCityPct}% is below the ${pouAttribution.mergeThresholdPct}% merge rule; use an override with a reason`);
+    }
   }
   if (entry.decision === 'override' && !entry.reason) throw new Error(`${entry.eiaName}: an override requires a reason`);
 }
@@ -83,7 +100,7 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
     }
     const reported = capacity.get(entry.eiaName);
     const pair = overlap.get(overlapKey(entry.territoryName, entry.city));
-    checkDecision(entry, reported, pair, pouAttribution);
+    checkDecision(entry, reported, pair, pouAttribution, pouInputs.territoryOverlap.repairedTerritoryAreaPct ?? {});
 
     if (entry.decision === 'excluded') {
       // Carries the same conversion the merged path uses, or a later sum over these
