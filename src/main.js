@@ -198,6 +198,10 @@ function renderRankings() {
   const excludePartial = document.querySelector('#exclude-partial')?.checked;
   const minimumPopulation = document.querySelector('#minimum-population')?.checked;
   const ranked = state.data.cities.filter((city) => Number.isFinite(config.value(city)) && (!excludePartial || city.coverage.status !== 'partial') && (!minimumPopulation || city.population >= 10_000)).sort((a, b) => config.value(b) - config.value(a)).slice(0, 20);
+  if (!ranked.length) {
+    document.querySelector('#ranking-table').innerHTML = '<div class="compare-empty">No cities match these filters.</div>';
+    return;
+  }
   const max = config.value(ranked[0]) || 1;
   const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${config.display(config.value(city))}</b></span>${qualityBadge(city)}</button>`).join('');
   document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${rows}`;
