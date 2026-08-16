@@ -6,9 +6,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
 import string
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
 
 import pyarrow as pa
@@ -30,6 +32,19 @@ METADATA_KEYS = {
 
 class ValidationError(RuntimeError):
     """Raised when a release asset violates its published contract."""
+
+
+def reject_nonfinite_json(constant: str) -> None:
+    """Reject Python's non-standard NaN/Infinity JSON extensions."""
+    raise ValidationError(f"Non-finite JSON constant is not allowed: {constant}")
+
+
+def parse_json_float(token: str) -> float:
+    """Parse a JSON float without permitting float64 overflow or underflow."""
+    number = float(token)
+    if not math.isfinite(number) or (number == 0 and Decimal(token) != 0):
+        raise ValidationError(f"JSON number is outside the finite float64 range: {token}")
+    return number
 
 
 def check(condition: bool, message: str) -> None:
@@ -110,12 +125,20 @@ def main() -> None:
         source_bytes = args.source.read_bytes()
         release_bytes = (args.directory / "california-solar-atlas.json").read_bytes()
         check(release_bytes == source_bytes, "Release JSON does not exactly match the canonical source")
-        payload = json.loads(source_bytes)
+        payload = json.loads(
+            source_bytes,
+            parse_constant=reject_nonfinite_json,
+            parse_float=parse_json_float,
+        )
         check(isinstance(payload, dict), "Canonical source root must be an object")
         check(isinstance(payload.get("meta"), dict), "Canonical source meta must be an object")
         check(isinstance(payload.get("cities"), list), "Canonical source cities must be an array")
         check(isinstance(payload.get("counties"), list), "Canonical source counties must be an array")
-        metadata = json.loads((args.directory / "metadata.json").read_text(encoding="utf-8"))
+        metadata = json.loads(
+            (args.directory / "metadata.json").read_text(encoding="utf-8"),
+            parse_constant=reject_nonfinite_json,
+            parse_float=parse_json_float,
+        )
         check(isinstance(metadata, dict) and set(metadata) == METADATA_KEYS, f"Metadata fields drifted: {sorted(metadata) if isinstance(metadata, dict) else type(metadata).__name__}")
         cities = pq.read_table(args.directory / "cities.parquet")
         counties = pq.read_table(args.directory / "counties.parquet")
@@ -195,7 +218,7 @@ def main() -> None:
         check(abs(cec_json_total - payload["meta"]["allUtilityBenchmark"]["statewideCapacityMwAc"]) <= 0.001, f"CEC county benchmark sum {cec_json_total} does not match statewide metadata")
         cec_parquet_total = round(sum(counties.column("allUtilityBenchmark_capacityMwAc").to_pylist()), 3)
         check(abs(cec_parquet_total - payload["meta"]["allUtilityBenchmark"]["statewideCapacityMwAc"]) <= 0.001, f"CEC Parquet benchmark sum {cec_parquet_total} does not match statewide metadata")
-    except (KeyError, OSError, TypeError, ValueError, ValidationError) as error:
+    except (KeyError, OSError, OverflowError, TypeError, ValueError, ValidationError) as error:
         raise SystemExit(f"Release validation failed: {error}") from error
 
 

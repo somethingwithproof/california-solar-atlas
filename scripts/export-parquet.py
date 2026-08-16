@@ -7,6 +7,7 @@ import hashlib
 import json
 import math
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,8 @@ import pyarrow.parquet as pq
 from parquet_schema import CITY_SCHEMA, CITY_TIMELINE_SCHEMA, COUNTY_SCHEMA, COUNTY_TIMELINE_SCHEMA
 
 MAX_INPUT_BYTES = 25_000_000
+INT64_MIN = -(2**63)
+INT64_MAX = 2**63 - 1
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_INPUT = PROJECT_ROOT / "public" / "data" / "cities.json"
 CANONICAL_OUTPUT = PROJECT_ROOT / "dist-data"
@@ -23,7 +26,39 @@ CANONICAL_OUTPUT = PROJECT_ROOT / "dist-data"
 
 def finite_number(value: object) -> bool:
     """Accept finite numeric data while rejecting booleans and nulls."""
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return INT64_MIN <= value <= INT64_MAX
+    return isinstance(value, float) and math.isfinite(value)
+
+
+def reject_nonfinite_json(constant: str) -> None:
+    """Reject Python's non-standard NaN/Infinity JSON extensions."""
+    raise ValueError(f"Non-finite JSON constant is not allowed: {constant}")
+
+
+def parse_json_float(token: str) -> float:
+    """Parse a JSON float without permitting float64 overflow or underflow."""
+    number = float(token)
+    if not math.isfinite(number) or (number == 0 and Decimal(token) != 0):
+        raise ValueError(f"JSON number is outside the finite float64 range: {token}")
+    return number
+
+
+def validate_numeric_leaves(value: object, context: str = "payload") -> None:
+    """Require every numeric JSON leaf to fit the published Arrow primitives."""
+    if isinstance(value, dict):
+        for key, child in value.items():
+            validate_numeric_leaves(child, f"{context}.{key}")
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            validate_numeric_leaves(child, f"{context}[{index}]")
+    elif isinstance(value, int) and not isinstance(value, bool):
+        if not INT64_MIN <= value <= INT64_MAX:
+            raise ValueError(f"{context}: integer is outside the int64 range")
+    elif isinstance(value, float) and not math.isfinite(value):
+        raise ValueError(f"{context}: number must be finite")
 
 
 def put(target: dict[str, object], key: str, value: object) -> None:
@@ -58,14 +93,38 @@ def require_keys(mapping: dict[str, Any], keys: set[str], context: str) -> None:
         raise ValueError(f"{context}: missing required fields: {', '.join(missing)}")
 
 
+def validate_meta(meta: dict[str, Any]) -> None:
+    """Validate release provenance fields before any assets are written."""
+    require_keys(meta, {"schemaVersion", "dataThrough", "generatedAt", "capacityBasis", "sourceCapacityMw", "totalCapacityMw", "allUtilityBenchmark"}, "meta")
+    if not isinstance(meta["schemaVersion"], int) or isinstance(meta["schemaVersion"], bool) or meta["schemaVersion"] <= 0:
+        raise ValueError("meta.schemaVersion must be a positive integer")
+    for field in ("dataThrough", "generatedAt", "capacityBasis"):
+        if not isinstance(meta[field], str) or not meta[field].strip():
+            raise ValueError(f"meta.{field} must be a non-empty string")
+    if not finite_number(meta["sourceCapacityMw"]) or not finite_number(meta["totalCapacityMw"]):
+        raise ValueError("meta capacity totals must be finite numeric values")
+    benchmark = meta["allUtilityBenchmark"]
+    if not isinstance(benchmark, dict):
+        raise ValueError("meta.allUtilityBenchmark must be an object")
+    require_keys(benchmark, {"year", "statewideCapacityMwAc", "basis", "sourceUrl"}, "meta.allUtilityBenchmark")
+    if not isinstance(benchmark["year"], int) or isinstance(benchmark["year"], bool):
+        raise ValueError("meta.allUtilityBenchmark.year must be an integer")
+    if not finite_number(benchmark["statewideCapacityMwAc"]):
+        raise ValueError("meta.allUtilityBenchmark.statewideCapacityMwAc must be finite")
+    for field in ("basis", "sourceUrl"):
+        if not isinstance(benchmark[field], str) or not benchmark[field].strip():
+            raise ValueError(f"meta.allUtilityBenchmark.{field} must be a non-empty string")
+
+
 def validate_payload(payload: object) -> dict[str, Any]:
     """Validate the structure required by the analytical export."""
     if not isinstance(payload, dict):
         raise ValueError("Input payload must be a JSON object")
+    validate_numeric_leaves(payload)
     require_keys(payload, {"meta", "cities", "counties"}, "payload")
     if not isinstance(payload["meta"], dict) or not isinstance(payload["cities"], list) or not isinstance(payload["counties"], list):
         raise ValueError("payload meta/cities/counties have unexpected types")
-    require_keys(payload["meta"], {"schemaVersion", "dataThrough", "generatedAt", "capacityBasis", "sourceCapacityMw", "totalCapacityMw", "allUtilityBenchmark"}, "meta")
+    validate_meta(payload["meta"])
     for index, city in enumerate(payload["cities"]):
         if not isinstance(city, dict):
             raise ValueError(f"city[{index}] must be an object")
@@ -182,7 +241,7 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         "sourceSha256": hashlib.sha256(source_bytes).hexdigest(),
     }
     # Metadata values affect file contents only; the release path is fixed above.
-    (destination / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")  # NOSONAR
+    (destination / "metadata.json").write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8")  # NOSONAR
 
     checksum_lines = [
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
@@ -190,6 +249,8 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         if path.name != "SHA256SUMS"
     ]
     (destination / "SHA256SUMS").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
+    for asset in destination.iterdir():
+        asset.chmod(0o644)
 
 
 def prepare_output(output: Path) -> None:
@@ -213,7 +274,9 @@ def run(input_path: Path, output_path: Path) -> None:
     if input_size <= 0 or input_size > MAX_INPUT_BYTES:
         raise ValueError(f"Input size is outside the 1–{MAX_INPUT_BYTES} byte contract: {input_size}")
     source_bytes = input_path.read_bytes()
-    payload = validate_payload(json.loads(source_bytes))
+    payload = validate_payload(
+        json.loads(source_bytes, parse_constant=reject_nonfinite_json, parse_float=parse_json_float)
+    )
     prepare_output(output_path)
 
     # Keeping staging under the output parent makes the final rename atomic on one filesystem.
@@ -227,7 +290,7 @@ def run(input_path: Path, output_path: Path) -> None:
 def main() -> None:
     try:
         run(CANONICAL_INPUT, CANONICAL_OUTPUT)
-    except (OSError, RuntimeError, TypeError, ValueError) as error:
+    except (OSError, OverflowError, RuntimeError, TypeError, ValueError) as error:
         raise SystemExit(f"Release export failed: {error}") from error
 
 

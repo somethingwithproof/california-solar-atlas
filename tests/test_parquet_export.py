@@ -31,7 +31,7 @@ VALIDATOR_SPEC.loader.exec_module(validate_parquet)
 class ExportParquetTests(unittest.TestCase):
     @staticmethod
     def payload() -> dict[str, object]:
-        meta = {"schemaVersion": 1, "dataThrough": "January 1, 2026", "generatedAt": "2026-01-01T00:00:00Z", "capacityBasis": "test", "sourceCapacityMw": 1, "totalCapacityMw": 1, "allUtilityBenchmark": {}}
+        meta = {"schemaVersion": 1, "dataThrough": "January 1, 2026", "generatedAt": "2026-01-01T00:00:00Z", "capacityBasis": "test", "sourceCapacityMw": 1, "totalCapacityMw": 1, "allUtilityBenchmark": {"year": 2024, "statewideCapacityMwAc": 1, "basis": "test", "sourceUrl": "https://example.com"}}
         city = {"id": "city-1", "name": "City", "county": "County", "geoid": "0600001", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1, "addedMw": 1, "projects": 1}], "utilities": []}
         county = {"slug": "county-1", "name": "County", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1}], "allUtilityBenchmark": {}}
         return {"meta": meta, "cities": [city], "counties": [county]}
@@ -75,6 +75,14 @@ class ExportParquetTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing required fields"):
             export_parquet.validate_payload({"meta": {}})
 
+    def test_payload_validation_rejects_malformed_benchmark_metadata(self) -> None:
+        for benchmark in ({}, {"year": 2024, "statewideCapacityMwAc": float("inf"), "basis": "test", "sourceUrl": "https://example.com"}):
+            with self.subTest(benchmark=benchmark):
+                payload = self.payload()
+                payload["meta"]["allUtilityBenchmark"] = benchmark
+                with self.assertRaisesRegex(ValueError, "allUtilityBenchmark"):
+                    export_parquet.validate_payload(payload)
+
     def test_payload_validation_rejects_duplicate_join_keys(self) -> None:
         payload = self.payload()
         payload["cities"].append(dict(payload["cities"][0]))
@@ -107,6 +115,35 @@ class ExportParquetTests(unittest.TestCase):
         payload = self.payload()
         payload["counties"][0]["timeline"] = ["not an object"]
         with self.assertRaisesRegex(ValueError, "malformed"):
+            export_parquet.validate_payload(payload)
+
+    def test_run_rejects_nonfinite_json_constants(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "source.json"
+            output = Path(temporary) / "release"
+            payload = self.payload()
+            payload["cities"][0]["capacityMw"] = float("nan")
+            source.write_text(json.dumps(payload), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Non-finite JSON constant"):
+                export_parquet.run(source, output)
+
+    def test_json_float_parser_rejects_overflow_and_underflow(self) -> None:
+        for token in ("1e400", "1e-400"):
+            with self.subTest(token=token), self.assertRaisesRegex(ValueError, "float64 range"):
+                export_parquet.parse_json_float(token)
+            with self.subTest(validator_token=token), self.assertRaisesRegex(
+                validate_parquet.ValidationError, "float64 range"
+            ):
+                validate_parquet.parse_json_float(token)
+
+    def test_payload_validation_rejects_out_of_range_numeric_leaves(self) -> None:
+        payload = self.payload()
+        payload["cities"][0]["projects"] = 10**400
+        with self.assertRaisesRegex(ValueError, "int64 range"):
+            export_parquet.validate_payload(payload)
+        payload = self.payload()
+        payload["meta"]["sourceCapacityMw"] = float("inf")
+        with self.assertRaisesRegex(ValueError, "must be finite"):
             export_parquet.validate_payload(payload)
 
     def test_write_table_rejects_empty_rows(self) -> None:
@@ -209,6 +246,7 @@ class ExportParquetTests(unittest.TestCase):
             export_parquet.run(source, output)
             subprocess.run([sys.executable, str(VALIDATOR_SCRIPT), str(output), "--source", str(source)], cwd=ROOT, check=True)
             self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o755)
+            self.assertTrue(all(stat.S_IMODE(asset.stat().st_mode) == 0o644 for asset in output.iterdir()))
             metadata_path = output / "metadata.json"
             original_metadata = metadata_path.read_text(encoding="utf-8")
             metadata = json.loads(original_metadata)
@@ -252,7 +290,9 @@ class ExportParquetTests(unittest.TestCase):
 
             table = pq.read_table(timeline_path)
             identities = table.column("city_id").to_pylist()
-            identities[0] = identities[26]
+            alternate_identity = next((identity for identity in identities if identity != identities[0]), None)
+            self.assertIsNotNone(alternate_identity, "Production timeline must contain at least two city IDs")
+            identities[0] = alternate_identity
             index = table.schema.get_field_index("city_id")
             mutated = table.set_column(index, table.schema.field(index), pa.array(identities, type=pa.string()))
             pq.write_table(mutated, timeline_path, compression="zstd", version="2.6")
