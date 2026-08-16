@@ -39,6 +39,11 @@ for (const city of data.cities) {
   assert.equal(city.storageCapacityStatus, 'withheld-source-units-inconsistent', `${city.name}: storage warning missing`);
   assert.ok(Number.isInteger(city.projects) && city.projects >= 0, `${city.name}: invalid project count`);
   assert.ok(Number.isInteger(city.storageProjects) && city.storageProjects >= 0 && city.storageProjects <= city.projects, `${city.name}: invalid storage-linked project count`);
+  assert.deepEqual(Object.keys(city.sectors).sort(), ['commercial', 'other', 'public', 'residential'], `${city.name}: unexpected sector schema`);
+  for (const [name, sector] of Object.entries(city.sectors)) {
+    assert.ok(Number.isFinite(sector.mw) && sector.mw >= 0, `${city.name}: invalid ${name} capacity`);
+    assert.ok(Number.isInteger(sector.projects) && sector.projects >= 0, `${city.name}: invalid ${name} project count`);
+  }
   const sectorCapacity = Object.values(city.sectors).reduce((sum, sector) => sum + sector.mw, 0);
   const sectorProjects = Object.values(city.sectors).reduce((sum, sector) => sum + sector.projects, 0);
   assert.ok(Math.abs(sectorCapacity - city.capacityMw) <= .002, `${city.name}: sector capacity does not reconcile`);
