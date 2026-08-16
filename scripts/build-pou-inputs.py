@@ -55,15 +55,34 @@ IOU_IN_SOURCE = ("Pacific Gas", "Southern California Edison", "San Diego Gas")
 AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
 
+def remote_length(url: str) -> int | None:
+    """Ask the server how many bytes it would send, or None if it will not say."""
+    request = Request(url, headers={"User-Agent": AGENT}, method="HEAD")
+    try:
+        with urlopen(request, timeout=60) as response:
+            declared = response.headers.get("Content-Length")
+    except OSError:
+        return None
+    return int(declared) if declared and declared.isdigit() else None
+
+
 def fetch(url: str, destination: Path) -> bytes:
     """Download a source release once, reusing a cached copy only if it is intact."""
     if destination.is_symlink():
         raise SystemExit(f"Refusing to use a symlinked cache entry: {destination}")
     if destination.is_file():
         cached = destination.read_bytes()
-        if 0 < len(cached) <= MAX_SOURCE_BYTES:
-            return cached
-        raise SystemExit(f"Cached source is empty or oversize; delete it and retry: {destination}")
+        if not 0 < len(cached) <= MAX_SOURCE_BYTES:
+            raise SystemExit(f"Cached source is empty or oversize; delete it and retry: {destination}")
+        # The caller publishes sha256(bytes) as upstream provenance, so a cached file is
+        # only trustworthy if it still matches what the server is serving today. This
+        # catches both a short earlier download and a stale prior-year release.
+        upstream = remote_length(url)
+        if upstream is not None and upstream != len(cached):
+            raise SystemExit(
+                f"Cached source is {len(cached)} bytes but upstream now serves {upstream}; "
+                f"delete it and retry: {destination}")
+        return cached
 
     with urlopen(Request(url, headers={"User-Agent": AGENT}), timeout=300) as response:
         declared = response.headers.get("Content-Length")

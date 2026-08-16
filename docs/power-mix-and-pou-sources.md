@@ -201,7 +201,12 @@ and generation totals include municipal utilities.
 Regenerate the inputs when a new annual release lands:
 
 ```bash
-pip install -r requirements-pou-inputs.txt
-python scripts/build-pou-inputs.py   # rewrites data/pou-inputs.json
+pip install -r requirements-pou-inputs.txt          # pinned; shapely and pyproj decide the merge gate
+python scripts/build-pou-inputs.py \
+  --boundaries /path/to/ca-city-boundaries-wgs84.geojson   # rewrites data/pou-inputs.json
 npm run data:build
 ```
+
+The downloads cache under `.pou-cache/`. A cached file is reused only while its size
+still matches what the server serves, so a short or prior-year copy is refused rather
+than hashed into `sourceSha256`.

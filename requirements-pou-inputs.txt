@@ -1,5 +1,10 @@
-# Manual regeneration of data/pou-inputs.json. Not installed by CI; the output is checked in.
-openpyxl
-pandas
-pyproj
-shapely
+# Manual regeneration of data/pou-inputs.json. Not installed by CI; the output is
+# checked in. Pinned because shapely and pyproj decide the territory percentages that
+# gate a merge, so an unpinned upgrade could move a borderline utility with no way to
+# tell whether the source or the library changed. These versions produced the
+# committed data/pou-inputs.json.
+numpy==2.5.2
+openpyxl==3.1.5
+pandas==3.0.5
+pyproj==3.7.2
+shapely==2.1.2
