@@ -3,7 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
-import { pouByCity, applyPouCapacity } from './pou-attribution.mjs';
+import { pouByCity, applyPouCapacity, trimStateSuffix } from './pou-attribution.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const unzipCommand = '/usr/bin/unzip';
@@ -507,6 +507,12 @@ const payload = {
         high: Number(records.reduce((sum, city) => sum + (city.pouCapacity?.capacityRangeMwDc.high || 0), 0).toFixed(3))
       },
       unattributedUtilities: pouExcluded.length,
+      // Named from the registry so the dialog cannot keep claiming a utility is
+      // unattributed after its decision changes.
+      unattributedNames: pouExcluded
+        .slice()
+        .sort((a, b) => b.capacityRangeMwDc.low - a.capacityRangeMwDc.low)
+        .map((utility) => trimStateSuffix(utility.eiaName)),
       // Reported values mix AC and DC filers, so the only summable form is the converted band.
       unattributedRangeMwDc: {
         low: Number(pouExcluded.reduce((sum, utility) => sum + utility.capacityRangeMwDc.low, 0).toFixed(3)),

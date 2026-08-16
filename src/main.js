@@ -2,13 +2,12 @@ import './styles.css';
 // Editorial reference list, not pipeline provenance. Bundled rather than published in
 // cities.json so the release payload keeps describing only what produced its figures.
 import referenceSources from '../data/reference-sources.json';
+import { capacityFloor, capacityRange, format, generationMid, generationRange, integer, metricConfig, metricDisplay, rangeText } from './metrics.js';
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/cities.json`;
 const BOUNDARIES_URL = `${import.meta.env.BASE_URL}data/boundaries.json`;
 const app = document.querySelector('#app');
 const state = { data: null, boundaries: {}, city: null, county: null, compare: [], mapMetric: 'capacityMw', rankMetric: 'capacityMw' };
-const format = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
-const integer = new Intl.NumberFormat('en-US');
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 const safeUrl = (value = '') => { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : '#'; } catch { return '#'; } };
@@ -16,13 +15,6 @@ const slugify = (value) => value.normalize('NFD').replace(/\p{M}/gu, '').toLower
 const cityUrl = (city) => { const url = new URL(location.href); url.searchParams.set('city', slugify(city.name)); url.searchParams.delete('county'); return url; };
 const countyUrl = (county) => { const url = new URL(location.href); url.searchParams.set('county', county.slug); url.searchParams.delete('city'); return url; };
 const uniqueCities = (cities) => [...new Map(cities.filter(Boolean).map((city) => [city.id, city])).values()];
-const generationRange = (city) => city.totalGenerationRangeGwh || city.generationGwh;
-const generationMid = (city) => (generationRange(city).low + generationRange(city).high) / 2;
-const capacityRange = (city) => city.totalCapacityRangeMwDc || { low: city.capacityMw, high: city.capacityMw };
-const capacityFloor = (city) => capacityRange(city).low;
-const rangeText = ({ low, high }, unit) => low === high ? `${format.format(low)} ${unit}` : `${format.format(low)}\u2013${format.format(high)} ${unit}`;
-// Sorting and shading need one number; the label must still show the band.
-const metricDisplay = (config, city) => config.displayCity ? config.displayCity(city) : metricDisplay(config, city);
 const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ? generationMid(city) / (deliveries + generationMid(city)) * 100 : null;
 const coverageStatus = (city) => ['reported', 'partial', 'unverified'].includes(city.coverage?.status) ? city.coverage.status : 'unverified';
 const zoneLabel = (city) => city.climateZone == null ? 'unassigned' : escapeHtml(city.climateZone);
@@ -55,11 +47,6 @@ const glossary = {
 
 const term = (label, key) => `<span class="term" tabindex="0" role="note" aria-label="${escapeHtml(label)}. ${escapeHtml(glossary[key])}">${escapeHtml(label)}<i class="tip" aria-hidden="true">${escapeHtml(glossary[key])}</i></span>`;
 
-const metricConfig = {
-  capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: capacityFloor, display: (value) => `${format.format(value)} MW`, displayCity: (city) => rangeText(capacityRange(city), 'MW') },
-  generation: { label: 'Estimated generation', short: 'GWh/year', value: generationMid, display: (value) => `${format.format(value)} GWh`, displayCity: (city) => rangeText(generationRange(city), 'GWh') },
-  growth5yPct: { label: 'Five-year growth', short: '5-year growth', value: (city) => city.growth5yPct, display: (value) => `${format.format(value)}%` }
-};
 
 function shell(meta) {
   app.innerHTML = `
@@ -130,7 +117,7 @@ function metricOptions(selected) {
 function limitsDialog(meta) {
   const pou = meta.publicUtilityCoverage;
   const municipalCoverage = pou
-    ? `Municipal capacity is added for ${integer.format(pou.mergedCities)} cities from ${escapeHtml(pou.year)} Form EIA-861 (${format.format(pou.mergedRangeMwDc.low)}–${format.format(pou.mergedRangeMwDc.high)} MW-DC) where the utility's service territory lies inside the city. A further ${format.format(pou.unattributedRangeMwDc.low)}–${format.format(pou.unattributedRangeMwDc.high)} MW-DC across ${integer.format(pou.unattributedUtilities)} utilities, including SMUD and Imperial Irrigation District, serves several cities at once and is not attributed to any of them.`
+    ? `Municipal capacity is added for ${integer.format(pou.mergedCities)} cities from ${escapeHtml(pou.year)} Form EIA-861 (${format.format(pou.mergedRangeMwDc.low)}–${format.format(pou.mergedRangeMwDc.high)} MW-DC) where the utility's service territory lies inside the city. A further ${format.format(pou.unattributedRangeMwDc.low)}–${format.format(pou.unattributedRangeMwDc.high)} MW-DC across ${integer.format(pou.unattributedUtilities)} utilities, largest being ${escapeHtml(pou.unattributedNames.slice(0, 2).join(' and '))}, serves several cities at once and is not attributed to any of them.`
     : 'LADWP, SMUD, and other public utilities are absent from these files, so affected city totals are lower bounds.';
   return `<dialog class="limits-dialog" aria-labelledby="limits-title"><form method="dialog"><button class="dialog-close" aria-label="Close data limitations">×</button></form><div class="eyebrow"><span></span> Data limitations</div><h2 id="limits-title">What this data can—and cannot—tell you.</h2><div class="limits-list">
     <article><b>Reported capacity is not production.</b><p>DC nameplate comes from interconnected project records. Generation uses a CEC climate-zone fleet range and 0.5% annual degradation, not production meters.</p></article>

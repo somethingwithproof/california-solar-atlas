@@ -12,7 +12,14 @@ export const trimStateSuffix = (name) => name.endsWith(STATE_SUFFIX) ? name.slic
 // NUL cannot appear in a utility or city name, so it cannot forge a composite key.
 export const overlapKey = (utility, city) => `${utility}\u0000${city}`;
 
+const DECISIONS = new Set(['rule', 'override', 'excluded']);
+
 export function pouByCity(pouInputs, pouAttribution, cityKey) {
+  // Without a finite threshold every `pct < undefined` is false, so every rule entry
+  // would merge unconditionally rather than being measured against anything.
+  if (!Number.isFinite(pouAttribution.mergeThresholdPct)) {
+    throw new Error('data/pou-attribution.json must set a numeric mergeThresholdPct');
+  }
   const capacity = new Map(pouInputs.netMetering.utilities.map((utility) => [utility.utility, utility]));
   const overlap = new Map();
   for (const pair of pouInputs.territoryOverlap.pairs) overlap.set(overlapKey(pair.utility, pair.city), pair);
@@ -21,6 +28,10 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
   const excluded = [];
 
   for (const entry of pouAttribution.utilities) {
+    // No default arm: an unrecognized decision must not fall through into the merge path.
+    if (!DECISIONS.has(entry.decision)) {
+      throw new Error(`${entry.eiaName}: decision must be one of ${[...DECISIONS].join(', ')}, found ${JSON.stringify(entry.decision)}`);
+    }
     const reported = capacity.get(entry.eiaName);
     if (!reported) throw new Error(`${entry.eiaName}: no EIA-861 capacity row; refresh data/pou-inputs.json`);
     if (entry.decision === 'excluded') {

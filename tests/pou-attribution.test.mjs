@@ -164,3 +164,21 @@ test('only the EIA state suffix is trimmed', () => {
   assert.equal(trimStateSuffix('Alameda Municipal Power'), 'Alameda Municipal Power');
   assert.equal(trimStateSuffix('City of Corona - (CA) Annex'), 'City of Corona - (CA) Annex');
 });
+
+test('an unrecognized decision value is refused rather than merged', () => {
+  for (const decision of ['Rule', 'merge', '', undefined]) {
+    assert.throws(() => pouByCity(
+      inputs({ pairs: [pair('Testville Electric', 'Testville', 10)] }),
+      attribution([{ eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision }]),
+      cityKey
+    ), /decision must be one of/, `decision ${JSON.stringify(decision)} must not fall through into the merge path`);
+  }
+});
+
+test('a missing merge threshold is refused rather than merging everything', () => {
+  const broken = attribution([{ eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' }]);
+  delete broken.mergeThresholdPct;
+  // `pct < undefined` is false, so without this guard every rule entry merges unmeasured.
+  assert.throws(() => pouByCity(inputs({ pairs: [pair('Testville Electric', 'Testville', 1)] }), broken, cityKey),
+    /must set a numeric mergeThresholdPct/);
+});
