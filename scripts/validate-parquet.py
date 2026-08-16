@@ -15,10 +15,10 @@ import pyarrow.parquet as pq
 
 MAX_INPUT_BYTES = 25_000_000
 SCHEMA_FINGERPRINTS = {
-    "cities": "93569a042d8cda0099b063bcd3c63a1c8486df8b6ae526bbfdef9b5a0d7eab92",
-    "counties": "bcf06ee82e5020a8d7c92eb3ebcdfde1d6bd3d8d899e6bc3bc860a0fc6281523",
-    "city-timeline": "e74771112c7a3e1bfcada91f791a42a31b53b3cca2590778e502a7301c03baa4",
-    "county-timeline": "180caeae41e8a7f8eb3919cdbf7735332b4bd1e6dbb513eed275c35a64a749c5",
+    "cities": "eeef828f843a8a8f5fd5a0c3ecaa549643891b0c053590d67578a2caba464d93",
+    "counties": "092fb7de223913f9b3254e21f416c9a3aa65f0733bee7a50c957227912b51c5d",
+    "city-timeline": "03e6cd91136514c8095f21aecde208cef7b4e25631d23ccd7a39b081288c5072",
+    "county-timeline": "8963492a078505d552462ff66154c311459f5597810b62ea122fdfa037b9649e",
 }
 METADATA_KEYS = {
     "schemaVersion", "dataThrough", "generatedAt", "capacityBasis", "iouSourceCapacityMwDc",
@@ -60,7 +60,8 @@ def verify_checksums(directory: Path) -> None:
 
 def verify_schema(name: str, schema: object) -> None:
     """Pin the public wire types independently from the exporter schema module."""
-    observed = hashlib.sha256(str(schema).encode()).hexdigest()
+    canonical = "\n".join(f"{field.name}:{field.type}:{'nullable' if field.nullable else 'required'}" for field in schema)
+    observed = hashlib.sha256(canonical.encode()).hexdigest()
     check(observed == SCHEMA_FINGERPRINTS[name], f"{name} Parquet schema fingerprint drifted: {observed}")
 
 
@@ -180,6 +181,8 @@ def main() -> None:
 
         cec_json_total = round(sum(county["allUtilityBenchmark"]["capacityMwAc"] for county in payload["counties"]), 3)
         check(abs(cec_json_total - payload["meta"]["allUtilityBenchmark"]["statewideCapacityMwAc"]) <= 0.001, f"CEC county benchmark sum {cec_json_total} does not match statewide metadata")
+        cec_parquet_total = round(sum(counties.column("allUtilityBenchmark_capacityMwAc").to_pylist()), 3)
+        check(abs(cec_parquet_total - payload["meta"]["allUtilityBenchmark"]["statewideCapacityMwAc"]) <= 0.001, f"CEC Parquet benchmark sum {cec_parquet_total} does not match statewide metadata")
     except (KeyError, OSError, TypeError, ValueError, ValidationError) as error:
         raise SystemExit(f"Release validation failed: {error}") from error
 

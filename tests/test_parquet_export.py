@@ -32,8 +32,8 @@ class ExportParquetTests(unittest.TestCase):
     @staticmethod
     def payload() -> dict[str, object]:
         meta = {"schemaVersion": 1, "dataThrough": "January 1, 2026", "generatedAt": "2026-01-01T00:00:00Z", "capacityBasis": "test", "sourceCapacityMw": 1, "totalCapacityMw": 1, "allUtilityBenchmark": {}}
-        city = {"id": "city-1", "name": "City", "timeline": [{"year": 2026, "mw": 1, "addedMw": 1, "projects": 1}], "utilities": []}
-        county = {"slug": "county-1", "name": "County", "timeline": [{"year": 2026, "mw": 1}], "allUtilityBenchmark": {}}
+        city = {"id": "city-1", "name": "City", "county": "County", "geoid": "0600001", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1, "addedMw": 1, "projects": 1}], "utilities": []}
+        county = {"slug": "county-1", "name": "County", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1}], "allUtilityBenchmark": {}}
         return {"meta": meta, "cities": [city], "counties": [county]}
 
     @staticmethod
@@ -43,6 +43,12 @@ class ExportParquetTests(unittest.TestCase):
             for path in sorted(directory.iterdir()) if path.name != "SHA256SUMS"
         ]
         (directory / "SHA256SUMS").write_text("\n".join(manifest) + "\n", encoding="utf-8")
+
+    def assert_validation_fails(self, output: Path, source: Path, message: str) -> None:
+        self.rewrite_manifest(output)
+        failed = subprocess.run([sys.executable, str(VALIDATOR_SCRIPT), str(output), "--source", str(source)], cwd=ROOT, capture_output=True, text=True)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn(message, failed.stderr)
 
     def test_flatten_rejects_colliding_keys(self) -> None:
         target = {"load_deliveries_Gwh": 1}
@@ -80,6 +86,12 @@ class ExportParquetTests(unittest.TestCase):
         payload["cities"][0]["timeline"] = []
         with self.assertRaisesRegex(ValueError, "1–200"):
             export_parquet.validate_payload(payload)
+
+    def test_payload_validation_rejects_missing_core_field(self) -> None:
+        payload = self.payload()
+        del payload["cities"][0]["capacityMw"]
+        with self.assertRaisesRegex(ValueError, "capacityMw"):
+            export_parquet.validate_payload(payload)
         payload = self.payload()
         payload["counties"][0]["timeline"] = ["not an object"]
         with self.assertRaisesRegex(ValueError, "malformed"):
@@ -94,9 +106,9 @@ class ExportParquetTests(unittest.TestCase):
         complete = {name: None for name in export_parquet.CITY_SCHEMA.names}
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "table.parquet"
-            with self.assertRaisesRegex(ValueError, "missing"):
+            with self.assertRaisesRegex(ValueError, "required schema columns"):
                 export_parquet.write_table([{key: value for key, value in complete.items() if key != "id"}], destination, export_parquet.CITY_SCHEMA)
-            with self.assertRaisesRegex(ValueError, "extra"):
+            with self.assertRaisesRegex(ValueError, "Unexpected"):
                 export_parquet.write_table([{**complete, "unexpected": 1}], destination, export_parquet.CITY_SCHEMA)
 
     def test_prepare_output_rejects_existing_file(self) -> None:
@@ -183,22 +195,54 @@ class ExportParquetTests(unittest.TestCase):
             metadata = json.loads(original_metadata)
             metadata["matchedCityCapacityMwDc"] += 1
             metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
-            self.rewrite_manifest(output)
-            failed = subprocess.run([sys.executable, str(VALIDATOR_SCRIPT), str(output), "--source", str(source)], cwd=ROOT, capture_output=True, text=True)
-            self.assertNotEqual(failed.returncode, 0)
-            self.assertIn("does not match canonical JSON", failed.stderr)
+            self.assert_validation_fails(output, source, "does not match canonical JSON")
             metadata_path.write_text(original_metadata, encoding="utf-8")
             self.rewrite_manifest(output)
             table_path = output / "cities.parquet"
+            original_table = table_path.read_bytes()
             table = pq.read_table(table_path)
             capacities = table.column("capacityMw").to_pylist()
             capacities[0] += 1
-            table = table.set_column(table.schema.get_field_index("capacityMw"), "capacityMw", pa.array(capacities, type=pa.float64()))
+            index = table.schema.get_field_index("capacityMw")
+            table = table.set_column(index, table.schema.field(index), pa.array(capacities, type=pa.float64()))
             pq.write_table(table, table_path, compression="zstd", version="2.6")
-            self.rewrite_manifest(output)
-            failed = subprocess.run([sys.executable, str(VALIDATOR_SCRIPT), str(output), "--source", str(source)], cwd=ROOT, capture_output=True, text=True)
-            self.assertNotEqual(failed.returncode, 0)
-            self.assertIn("differ from canonical JSON", failed.stderr)
+            self.assert_validation_fails(output, source, "city Parquet values differ")
+            table_path.write_bytes(original_table)
+
+            county_path = output / "counties.parquet"
+            original_county = county_path.read_bytes()
+            table = pq.read_table(county_path)
+            capacities = table.column("capacityMw").to_pylist()
+            capacities[0] += 1
+            index = table.schema.get_field_index("capacityMw")
+            table = table.set_column(index, table.schema.field(index), pa.array(capacities, type=pa.float64()))
+            pq.write_table(table, county_path, compression="zstd", version="2.6")
+            self.assert_validation_fails(output, source, "county Parquet values differ")
+            county_path.write_bytes(original_county)
+
+            timeline_path = output / "city-timeline.parquet"
+            original_timeline = timeline_path.read_bytes()
+            table = pq.read_table(timeline_path)
+            values = table.column("mw").to_pylist()
+            values[0] += 1
+            index = table.schema.get_field_index("mw")
+            mutated = table.set_column(index, table.schema.field(index), pa.array(values, type=pa.float64()))
+            pq.write_table(mutated, timeline_path, compression="zstd", version="2.6")
+            self.assert_validation_fails(output, source, "City timeline values do not match")
+            timeline_path.write_bytes(original_timeline)
+
+            table = pq.read_table(timeline_path)
+            identities = table.column("city_id").to_pylist()
+            identities[0] = identities[26]
+            index = table.schema.get_field_index("city_id")
+            mutated = table.set_column(index, table.schema.field(index), pa.array(identities, type=pa.string()))
+            pq.write_table(mutated, timeline_path, compression="zstd", version="2.6")
+            self.assert_validation_fails(output, source, "City timeline joins or row counts are corrupted")
+            timeline_path.write_bytes(original_timeline)
+
+            table = pq.read_table(timeline_path).slice(1)
+            pq.write_table(table, timeline_path, compression="zstd", version="2.6")
+            self.assert_validation_fails(output, source, "City timeline rows disagree")
 
 
 if __name__ == "__main__":
