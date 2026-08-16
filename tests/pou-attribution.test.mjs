@@ -108,6 +108,26 @@ test('excluded utilities are reported rather than dropped', () => {
   assert.deepEqual(excluded.map((entry) => [entry.eiaName, entry.capacityMw]), [['Sprawling Irrigation District', 388]]);
 });
 
+test('excluded utilities carry a DC band so a sum cannot mix AC and DC', () => {
+  const { excluded } = pouByCity(
+    inputs({ utilities: [
+      { utility: 'Sprawling Irrigation District', basis: 'AC', capacityMw: 100 },
+      { utility: 'Far Northern Power', basis: 'DC', capacityMw: 100 }
+    ] }),
+    attribution([
+      { eiaName: 'Sprawling Irrigation District', territoryName: 'Sprawling ID', decision: 'excluded', reason: 'many cities' },
+      { eiaName: 'Far Northern Power', territoryName: 'Far Northern', decision: 'excluded', reason: 'many counties' }
+    ]),
+    cityKey
+  );
+  const byName = Object.fromEntries(excluded.map((entry) => [entry.eiaName, entry]));
+  assert.deepEqual(byName['Sprawling Irrigation District'].capacityRangeMwDc, { low: 108, high: 125 });
+  // The DC filer is not converted, so summing the bands stays basis-consistent.
+  assert.deepEqual(byName['Far Northern Power'].capacityRangeMwDc, { low: 100, high: 100 });
+  const low = excluded.reduce((sum, entry) => sum + entry.capacityRangeMwDc.low, 0);
+  assert.equal(low, 208);
+});
+
 test('applyPouCapacity treats municipal capacity as undated', () => {
   const pou = { utility: 'Testville Electric', year: 2024, capacityRangeMwDc: { low: 100, high: 100 } };
   const record = applyPouCapacity({}, pou, {

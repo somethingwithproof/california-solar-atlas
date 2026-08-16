@@ -23,7 +23,21 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
   for (const entry of pouAttribution.utilities) {
     const reported = capacity.get(entry.eiaName);
     if (!reported) throw new Error(`${entry.eiaName}: no EIA-861 capacity row; refresh data/pou-inputs.json`);
-    if (entry.decision === 'excluded') { excluded.push({ ...entry, capacityMw: reported.capacityMw }); continue; }
+    if (entry.decision === 'excluded') {
+      // Carry the basis and the same conversion the merged path uses, or a later sum
+      // over these rows silently mixes AC and DC into one unlabelled total.
+      const isAcExcluded = reported.basis.toUpperCase() === 'AC';
+      excluded.push({
+        ...entry,
+        basis: reported.basis,
+        capacityMw: reported.capacityMw,
+        capacityRangeMwDc: {
+          low: Number((reported.capacityMw * (isAcExcluded ? ilrLow : 1)).toFixed(3)),
+          high: Number((reported.capacityMw * (isAcExcluded ? ilrHigh : 1)).toFixed(3))
+        }
+      });
+      continue;
+    }
 
     const pair = overlap.get(overlapKey(entry.territoryName, entry.city));
     if (!pair) throw new Error(`${entry.eiaName}: no measured overlap for ${entry.territoryName} against ${entry.city}`);

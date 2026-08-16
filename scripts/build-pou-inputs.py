@@ -114,8 +114,12 @@ def fetch(url: str, destination: Path) -> bytes:
 
 def read_local_json(path: Path, label: str) -> object:
     """Read a caller-supplied JSON file only after it passes the same checks as a download."""
+    # Test the given path, not the resolved one: resolve() follows the link, so asking
+    # the resolved path whether it is a symlink can never be true.
+    if path.is_symlink():
+        raise SystemExit(f"{label} must not be a symlink: {path}")
     resolved = path.resolve()
-    if resolved.is_symlink() or not resolved.is_file():
+    if not resolved.is_file():
         raise SystemExit(f"{label} must be an existing regular file: {resolved}")
     size = resolved.stat().st_size
     if not 0 < size <= MAX_SOURCE_BYTES:

@@ -507,7 +507,11 @@ const payload = {
         high: Number(records.reduce((sum, city) => sum + (city.pouCapacity?.capacityRangeMwDc.high || 0), 0).toFixed(3))
       },
       unattributedUtilities: pouExcluded.length,
-      unattributedReportedMw: Number(pouExcluded.reduce((sum, utility) => sum + utility.capacityMw, 0).toFixed(3)),
+      // Reported values mix AC and DC filers, so the only summable form is the converted band.
+      unattributedRangeMwDc: {
+        low: Number(pouExcluded.reduce((sum, utility) => sum + utility.capacityRangeMwDc.low, 0).toFixed(3)),
+        high: Number(pouExcluded.reduce((sum, utility) => sum + utility.capacityRangeMwDc.high, 0).toFixed(3))
+      },
       basis: 'Reported net-metered capacity; AC values converted to DC across an inverter-loading-ratio band.',
       inverterLoadingRatio: pouAttribution.inverterLoadingRatio,
       mergeThresholdPct: pouAttribution.mergeThresholdPct,

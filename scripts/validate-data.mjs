@@ -127,7 +127,8 @@ const pou = data.meta.publicUtilityCoverage;
 assert.ok(pou && Number.isInteger(pou.mergedCities) && pou.mergedCities > 0, 'Public utility coverage summary missing');
 assert.ok(pou.mergedRangeMwDc.low <= pou.mergedRangeMwDc.high, 'Merged public utility range is inverted');
 assert.ok(Number.isInteger(pou.unattributedUtilities) && pou.unattributedUtilities > 0, 'Unattributable public utilities must stay disclosed');
-assert.ok(pou.unattributedReportedMw > 0, 'Unattributed public utility capacity must stay disclosed');
+assert.ok(pou.unattributedRangeMwDc.low > 0 && pou.unattributedRangeMwDc.low <= pou.unattributedRangeMwDc.high, 'Unattributed public utility capacity must stay disclosed as a DC band');
+assert.equal(pou.unattributedReportedMw, undefined, 'A single unattributed total would mix AC and DC filers');
 assert.ok(pou.inverterLoadingRatio.low <= pou.inverterLoadingRatio.high, 'Inverter loading ratio band is inverted');
 for (const source of pou.inverterLoadingRatio.sources) assert.match(source.url, /^https:\/\//, 'Inverter loading ratio source must use HTTPS');
 
