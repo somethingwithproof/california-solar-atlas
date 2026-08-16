@@ -21,7 +21,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - name: Download authoritative sources
         run: |
           curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/csv?layers=2' --output /tmp/ca-cities.csv

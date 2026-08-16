@@ -135,7 +135,12 @@ function sparkline(city) {
 
 function sectorRows(city) {
   const max = Math.max(...Object.values(city.sectors).map((sector) => sector.mw), 1);
-  return Object.entries(city.sectors).map(([name, sector]) => `<div class="sector-row"><span>${name}</span><div><i style="width:${sector.mw / max * 100}%"></i></div><strong>${format.format(sector.mw)} MW</strong><small>${integer.format(sector.projects)} sites</small></div>`).join('');
+  return Object.entries(city.sectors).map(([name, sector]) => `<div class="sector-row"><span>${name}</span><progress max="100" value="${sector.mw / max * 100}" aria-label="${escapeHtml(name)} share of city capacity"></progress><strong>${format.format(sector.mw)} MW</strong><small>${integer.format(sector.projects)} sites</small></div>`).join('');
+}
+
+function loadSource(city) {
+  if (!city.load) return '';
+  return `<span>Load source</span><p><a href="${safeUrl(city.load.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(city.load.sourceName)} ↗</a> — ${escapeHtml(city.load.note)}</p>`;
 }
 
 function cityCsv(city) {
@@ -154,7 +159,7 @@ function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
     <div class="metrics four"><article><span>Reported capacity</span><strong>${format.format(city.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(city.projects)} current project sites</p></article><article><span>Climate-adjusted generation</span><strong>${format.format(city.generationGwh.low)}–${format.format(city.generationGwh.high)} <small>GWh/yr</small></strong><p>${city.yieldRange.join('–')} kWh/kW · degradation applied</p></article><article><span>Average reported system</span><strong>${format.format(city.averageSystemKw)} <small>kW-DC</small></strong><p>Service-city aggregate; not a household adoption rate</p></article><article><span>Share of city electricity use</span>${share == null ? '<strong class="not-available">Not available</strong><p>No verified city load denominator</p>' : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
     <div class="detail-grid"><article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative MW-DC by approval date</h3></div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}</article><aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${city.generationGwh.low}</b><b>${city.generationGwh.high} GWh</b></div><p>Zone ${city.climateZone} uses ${city.yieldRange[0]}–${city.yieldRange[1]} kWh/kW-DC-year. Vintage-adjusted effective capacity is ${format.format(city.effectiveCapacityMw)} MW after 0.5% annual degradation.</p></aside></div>
     <div class="attributes"><article><div class="panel-head"><div><span>Customer mix</span><h3>Capacity by sector</h3></div></div>${sectorRows(city)}</article><article><div class="panel-head"><div><span>System profile</span><h3>What is connected</h3></div></div><dl><div><dt>Average system</dt><dd>${format.format(city.averageSystemKw)} kW</dd></div><div><dt>Storage-linked sites</dt><dd>${integer.format(city.storageProjects)}</dd></div><div><dt>Storage energy</dt><dd>Withheld · source units inconsistent</dd></div><div><dt>Source utilities</dt><dd>${city.utilities.length ? city.utilities.map(escapeHtml).join(', ') : 'None matched'}</dd></div></dl></article></div>
-    <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>Positive System Size DC values only; PTC and CEC-AC values are not substituted or mixed into totals.</p><span>History quality</span><p>Application-approval-date proxy; PTO generally occurs later and superseded applications can shift apparent timing.</p>${city.load ? `<span>Load source</span><p><a href="${safeUrl(city.load.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(city.load.sourceName)} ↗</a> — ${escapeHtml(city.load.note)}</p>` : ''}</div>`;
+    <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>Positive System Size DC values only; PTC and CEC-AC values are not substituted or mixed into totals.</p><span>History quality</span><p>Application-approval-date proxy; PTO generally occurs later and superseded applications can shift apparent timing.</p>${loadSource(city)}</div>`;
   document.querySelector('#city-search').value = city.name;
   const url = new URL(location.href); url.searchParams.set('city', slugify(city.name));
   if (historyMode === 'push') history.pushState({ city: city.geoid }, '', url);
@@ -170,8 +175,8 @@ function renderMap() {
   const cap = sorted[Math.floor(sorted.length * .95)] || 1;
   const paths = cities.map((city) => {
     const path = state.boundaries[city.geoid]; if (!path || !/^[MLZ0-9 .-]+$/.test(path)) return '';
-    const ratio = Math.min(config.value(city) / cap, 1); const lightness = 91 - ratio * 43;
-    return `<path class="map-city ${city.coverage.status}" style="fill:hsl(39 78% ${lightness}%)" d="${path}" data-geoid="${city.geoid}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${config.display(config.value(city))}"><title>${escapeHtml(city.name)} · ${config.display(config.value(city))} · ${coverageLabel(city.coverage.status)}</title></path>`;
+    const heat = Math.round(Math.min(config.value(city) / cap, 1) * 10);
+    return `<path class="map-city heat-${heat} ${city.coverage.status}" d="${path}" data-geoid="${city.geoid}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${config.display(config.value(city))}"><title>${escapeHtml(city.name)} · ${config.display(config.value(city))} · ${coverageLabel(city.coverage.status)}</title></path>`;
   }).join('');
   document.querySelector('#solar-map').innerHTML = `<svg viewBox="0 0 520 650" role="img" aria-label="California incorporated cities shaded by ${config.label}"><path class="state-outline" d="M28 13L236 13L236 204L490 459L486 603L372 615L307 522L213 494L118 325Z"/>${paths}</svg>`;
   const top = [...cities].sort((a, b) => config.value(b) - config.value(a)).slice(0, 5);
@@ -184,7 +189,8 @@ function renderRankings() {
   const minimumPopulation = document.querySelector('#minimum-population')?.checked;
   const ranked = state.data.cities.filter((city) => Number.isFinite(config.value(city)) && (!excludePartial || city.coverage.status !== 'partial') && (!minimumPopulation || city.population >= 10_000)).sort((a, b) => config.value(b) - config.value(a)).slice(0, 20);
   const max = config.value(ranked[0]) || 1;
-  document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${ranked.map((city, index) => `<button data-geoid="${city.geoid}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><i style="width:${config.value(city) / max * 100}%"></i><b>${config.display(config.value(city))}</b></span>${qualityBadge(city)}</button>`).join('')}`;
+  const rows = ranked.map((city, index) => `<button data-geoid="${city.geoid}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${config.display(config.value(city))}</b></span>${qualityBadge(city)}</button>`).join('');
+  document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${rows}`;
 }
 
 function addCompare(city) {
@@ -196,7 +202,16 @@ function renderCompare() {
   document.querySelector('.compare-count').textContent = `${state.compare.length} / 4`;
   if (!state.compare.length) { document.querySelector('#compare-view').innerHTML = '<div class="compare-empty">Search above to add cities to this comparison.</div>'; return; }
   const metrics = [['capacityMw', 'Reported capacity', 'MW'], ['projects', 'Project sites', 'sites'], ['generation', 'Generation midpoint', 'GWh'], ['growth5yPct', 'Five-year growth', '%']];
-  document.querySelector('#compare-view').innerHTML = `<div class="compare-chips">${state.compare.map((city) => `<button data-remove="${city.geoid}">${escapeHtml(city.name)} <span aria-hidden="true">×</span><span class="sr-only">Remove</span></button>`).join('')}</div><div class="compare-grid">${state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${city.geoid}" aria-label="Remove ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${city.climateZone}</p>${metrics.map(([metric, label, unit]) => { const value = metric === 'generation' ? generationMid(city) : city[metric]; const max = Math.max(...state.compare.map((item) => metric === 'generation' ? generationMid(item) : item[metric] || 0), 1); return `<div class="compare-metric"><span>${label}</span><strong>${value == null ? '—' : `${format.format(value)} ${unit}`}</strong><i style="width:${(value || 0) / max * 100}%"></i></div>`; }).join('')}<button class="text-button" data-geoid="${city.geoid}">View city →</button></article>`).join('')}</div>`;
+  const metricRow = (city, [metric, label, unit]) => {
+    const getValue = (item) => metric === 'generation' ? generationMid(item) : item[metric];
+    const value = getValue(city);
+    const max = Math.max(...state.compare.map((item) => getValue(item) || 0), 1);
+    const display = value == null ? '—' : `${format.format(value)} ${unit}`;
+    return `<div class="compare-metric"><span>${label}</span><strong>${display}</strong><progress max="100" value="${(value || 0) / max * 100}" aria-label="Relative ${escapeHtml(label)}"></progress></div>`;
+  };
+  const chips = state.compare.map((city) => `<button data-remove="${city.geoid}">${escapeHtml(city.name)} <span aria-hidden="true">×</span><span class="sr-only">Remove</span></button>`).join('');
+  const cards = state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${city.geoid}" aria-label="Remove ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${city.climateZone}</p>${metrics.map((metric) => metricRow(city, metric)).join('')}<button class="text-button" data-geoid="${city.geoid}">View city →</button></article>`).join('');
+  document.querySelector('#compare-view').innerHTML = `<div class="compare-chips">${chips}</div><div class="compare-grid">${cards}</div>`;
 }
 
 function download(name, content, type = 'text/csv') {

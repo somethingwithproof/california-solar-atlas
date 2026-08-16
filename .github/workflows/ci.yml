@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run build
       - run: npm audit --audit-level=moderate
