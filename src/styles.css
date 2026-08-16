@@ -17,3 +17,5 @@
 @media(max-width:520px){body{overflow-x:hidden}.site-header{min-width:0;gap:.7rem}.brand{font-size:.82rem;min-width:0}.limits-button{font-size:0}.hero{width:100%}.hero>*{max-width:100%}.hero .eyebrow{font-size:.55rem;line-height:1.5}.search-wrap{width:100%;max-width:100%}.panel-actions{align-items:flex-end;flex-direction:column;gap:.35rem}}
 .solar-map svg{width:100%;height:100%;display:block}.map-city{stroke:#fffdf8;stroke-width:.45;vector-effect:non-scaling-stroke;cursor:pointer;transition:filter .15s,stroke-width .15s}.map-city.partial{stroke:var(--red);stroke-width:1.2}.map-city:hover,.map-city:focus-visible{filter:brightness(.78);stroke:var(--ink);stroke-width:1.5;outline:none}
 .state-outline{fill:#e6ebe3;stroke:#c8d2ca;stroke-width:1;vector-effect:non-scaling-stroke}
+.hero{padding-top:clamp(2.75rem,6vw,5.25rem)}
+@media(max-width:520px){.hero{padding-top:2.75rem}}
