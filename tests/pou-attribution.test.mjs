@@ -9,7 +9,7 @@ import { applyPouCapacity, overlapKey, pouByCity, trimStateSuffix } from '../scr
 const cityKey = (value = '') => value.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
 function inputs({ utilities = [{ utility: 'City of Testville - (CA)', basis: 'AC', capacityMw: 100 }], pairs = [] } = {}) {
-  return { netMetering: { year: 2024, utilities }, territoryOverlap: { pairs } };
+  return { netMetering: { year: 2024, utilities }, territoryOverlap: { pairs, repairedTerritoryAreaPct: {}, repairedCityAreaPct: {} } };
 }
 
 function attribution(utilities, mergeThresholdPct = 95) {
@@ -214,29 +214,68 @@ function repairedInputs(pct, repairs) {
   return base;
 }
 
-test('a repair larger than the merge margin refuses an automatic merge', () => {
-  // 96% is one point above the 95% threshold, so a 4.2-point distortion could have
-  // carried it over. The territory is the ratio's denominator.
-  assert.throws(() => pouByCity(repairedInputs(96, { repairedTerritoryAreaPct: { 'Testville Electric': 4.2 } }), attribution([entryFor('rule')]), cityKey),
-    /geometry repairs could move the overlap/);
-
-  // The city is the ratio's numerator and must be weighed the same way.
-  assert.throws(() => pouByCity(repairedInputs(96, { repairedCityAreaPct: { Testville: 4.2 } }), attribution([entryFor('rule')]), cityKey),
-    /geometry repairs could move the overlap/);
-
-  // Both operands repaired: the distortions add.
-  assert.throws(() => pouByCity(repairedInputs(97, { repairedTerritoryAreaPct: { 'Testville Electric': 1.5 }, repairedCityAreaPct: { Testville: 1.5 } }), attribution([entryFor('rule')]), cityKey),
-    /geometry repairs could move the overlap/);
+test('a repaired territory refuses an automatic merge', () => {
+  assert.throws(() => pouByCity(repairedInputs(99.7, { repairedTerritoryAreaPct: { 'Testville Electric': 4.2 } }), attribution([entryFor('rule')]), cityKey),
+    /needed a geometry repair/);
 });
 
-test('a repair well inside the merge margin still merges', () => {
-  // Redding's real case: a 0.66-point city repair against a 99.7% overlap.
-  const { merged } = pouByCity(repairedInputs(99.7, { repairedCityAreaPct: { Testville: 0.66 } }), attribution([entryFor('rule')]), cityKey);
-  assert.equal(merged.get('TESTVILLE').method, 'territory-contained');
+test('a repaired city refuses an automatic merge too', () => {
+  // The city is the ratio's numerator. Converting its area change into points of
+  // territoryInCityPct needs A_city / A_territory, so no unscaled tolerance is safe.
+  assert.throws(() => pouByCity(repairedInputs(99.7, { repairedCityAreaPct: { Testville: 0.66 } }), attribution([entryFor('rule')]), cityKey),
+    /needed a geometry repair/);
 });
 
-test('a reviewed override may merge on a repaired geometry', () => {
+test('a reviewed override may merge on repaired geometry', () => {
   const { merged } = pouByCity(repairedInputs(96, { repairedTerritoryAreaPct: { 'Testville Electric': 4.2 } }),
     attribution([entryFor('override', { reason: 'reviewed against the utility map' })]), cityKey);
   assert.equal(merged.get('TESTVILLE').method, 'reviewed-override');
+});
+
+test('an absent repair ledger fails rather than silently disabling the gate', () => {
+  const base = inputs({ pairs: [pair('Testville Electric', 'Testville', 99)] });
+  delete base.territoryOverlap.repairedTerritoryAreaPct;
+  delete base.territoryOverlap.repairedCityAreaPct;
+  assert.throws(() => pouByCity(base, attribution([entryFor('rule')]), cityKey), /must carry repairedTerritoryAreaPct/);
+});
+
+test('an unrecognized decision value is refused rather than merged', () => {
+  for (const decision of ['Rule', 'merge', '', undefined]) {
+    assert.throws(() => pouByCity(
+      inputs({ pairs: [pair('Testville Electric', 'Testville', 10)] }),
+      attribution([{ eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision }]),
+      cityKey
+    ), /decision must be one of/, `decision ${JSON.stringify(decision)} must not fall through into the merge path`);
+  }
+});
+
+test('a missing merge threshold is refused rather than merging everything', () => {
+  const broken = attribution([{ eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' }]);
+  delete broken.mergeThresholdPct;
+  // `pct < undefined` is false, so without this guard every rule entry merges unmeasured.
+  assert.throws(() => pouByCity(inputs({ pairs: [pair('Testville Electric', 'Testville', 1)] }), broken, cityKey),
+    /must set a numeric mergeThresholdPct/);
+});
+
+test('an unusable inverter loading ratio is refused rather than zeroing every AC filer', () => {
+  const entry = { eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' };
+  const data = () => inputs({ pairs: [pair('Testville Electric', 'Testville', 99)] });
+
+  for (const ratio of [{ low: 0, high: 1.25 }, { low: null, high: 1.25 }, { low: 1.3, high: 1.25 }, undefined]) {
+    const broken = attribution([entry]);
+    broken.inverterLoadingRatio = ratio;
+    assert.throws(() => pouByCity(data(), broken, cityKey), /inverterLoadingRatio must be finite/,
+      `ratio ${JSON.stringify(ratio)} must not reach the conversion`);
+  }
+});
+
+test('a non-numeric overlap measurement is refused rather than merging unconditionally', () => {
+  const entry = { eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' };
+  // `undefined < 95` is false, so without a guard this merges instead of being measured.
+  for (const pct of [undefined, null, 'high', NaN, -1, 150]) {
+    assert.throws(() => pouByCity(
+      inputs({ pairs: [{ utility: 'Testville Electric', city: 'Testville', territoryInCityPct: pct, cityCoveredPct: 50 }] }),
+      attribution([entry]), cityKey
+    ), /territoryInCityPct must be a percentage/, `territoryInCityPct ${JSON.stringify(pct)} must not reach the gate`);
+  }
 });

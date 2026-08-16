@@ -39,7 +39,6 @@ DEFAULT_CACHE = PROJECT_ROOT / ".pou-cache"
 MAX_SOURCE_BYTES = 200_000_000
 MIN_TERRITORY_FEATURES = 40
 # A repair that moves the area more than this changes the denominator of the merge gate.
-REPAIR_AREA_TOLERANCE = 0.01  # percent; below this a repair cannot move the gate
 
 EIA_YEAR = 2024
 EIA_URL = f"https://www.eia.gov/electricity/data/eia861/zip/f861{EIA_YEAR}.zip"
@@ -193,43 +192,17 @@ def territory_features(lse_bytes: bytes) -> list[dict[str, object]]:
     return features
 
 
-def _albers(repairs: dict[str, float] | None = None):
-    """Return a projector into EPSG:3310, recording any geometry repair that moved area."""
-    repairs = {} if repairs is None else repairs
-    project = Transformer.from_crs("EPSG:4326", "EPSG:3310", always_xy=True).transform
-
-    def to_albers(geometry, label: str = "geometry"):
-        if not geometry.is_valid:
-            # buffer(0) can discard rings or whole parts. territoryInCityPct divides by
-            # the territory area, so a silent shrink inflates the ratio that gates a
-            # merge, and no downstream check can see it. Record the change instead of
-            # hiding it; build-data.mjs refuses a rule merge on a repaired territory.
-            before = geometry.area
-            geometry = geometry.buffer(0)
-            after = geometry.area
-            delta = abs(after - before) / before * 100 if before > 0 else 100.0
-            if delta > REPAIR_AREA_TOLERANCE:
-                repairs[label] = round(delta, 4)
-        return transform(project, geometry)
-
-    return to_albers
-
-
-def _territories(lse_bytes: bytes, to_albers) -> dict[str, object]:
-    """Union every feature belonging to one utility into a single territory."""
-    territories: dict[str, object] = {}
-    for feature in territory_features(lse_bytes):
-        utility = feature["properties"]["Utility"]
-        if not utility or any(marker in utility for marker in IOU_IN_SOURCE):
-            continue
-        geometry = to_albers(shape(feature["geometry"]), utility)
-        # A utility split across features must union, or its area shrinks and
-        # territoryInCityPct inflates past the merge gate.
-        territories[utility] = unary_union([territories[utility], geometry]) if utility in territories else geometry
-    return territories
-
-
 CALIFORNIA_BOUNDS = (-125.0, -113.0, 32.0, 43.0)
+
+
+def _first_points(geometry: object) -> list[tuple[float, float]]:
+    """Pull a leaf coordinate pair without walking an entire polygon."""
+    if not isinstance(geometry, dict):
+        return []
+    node: object = geometry.get("coordinates")
+    while isinstance(node, list) and node and isinstance(node[0], list):
+        node = node[0]
+    return [tuple(node[:2])] if isinstance(node, list) and len(node) >= 2 and all(isinstance(v, (int, float)) for v in node[:2]) else []
 
 
 def _require_wgs84(payload: dict) -> None:
@@ -244,31 +217,59 @@ def _require_wgs84(payload: dict) -> None:
                 raise SystemExit(f"City boundary coordinate {longitude}, {latitude} is outside California; check the CRS")
 
 
-def _first_points(geometry: object) -> list[tuple[float, float]]:
-    """Pull a few leaf coordinate pairs without walking an entire polygon."""
-    if not isinstance(geometry, dict):
-        return []
-    node: object = geometry.get("coordinates")
-    while isinstance(node, list) and node and isinstance(node[0], list):
-        node = node[0]
-    return [tuple(node[:2])] if isinstance(node, list) and len(node) >= 2 and all(isinstance(v, (int, float)) for v in node[:2]) else []
+def _albers():
+    """Return a projector into EPSG:3310, the equal-area basis for these ratios."""
+    project = Transformer.from_crs("EPSG:4326", "EPSG:3310", always_xy=True).transform
+    return lambda geometry: transform(project, geometry)
 
 
-def _cities(boundaries: Path, to_albers) -> tuple[dict[str, object], dict[str, str]]:
+def _union_repaired(parts: list, label: str, repairs: dict[str, float]):
+    """Union a label's features, then repair once and record what the repair moved.
+
+    Repairing per feature would measure a delta against that feature rather than the
+    union the merge gate actually divides by, so the union is formed first.
+    """
+    try:
+        merged = unary_union(parts)
+    except Exception:  # noqa: BLE001 - shapely raises varied topology errors here
+        merged = unary_union([part.buffer(0) for part in parts])
+        repairs[label] = 100.0
+        return merged
+    if merged.is_valid:
+        return merged
+    before = merged.area
+    merged = merged.buffer(0)
+    repairs[label] = round(abs(merged.area - before) / before * 100, 4) if before > 0 else 100.0
+    return merged
+
+
+def _territories(lse_bytes: bytes, to_albers, repairs: dict[str, float]) -> dict[str, object]:
+    """Group every feature belonging to one utility, then union it into a territory."""
+    parts: dict[str, list] = {}
+    for feature in territory_features(lse_bytes):
+        utility = feature["properties"]["Utility"]
+        if not utility or any(marker in utility for marker in IOU_IN_SOURCE):
+            continue
+        # A utility split across features must union, or its area shrinks and
+        # territoryInCityPct inflates past the merge gate.
+        parts.setdefault(utility, []).append(to_albers(shape(feature["geometry"])))
+    return {utility: _union_repaired(geoms, utility, repairs) for utility, geoms in parts.items()}
+
+
+def _cities(boundaries: Path, to_albers, repairs: dict[str, float]) -> tuple[dict[str, object], dict[str, str]]:
     """Union multi-part city boundaries and keep each city's GEOID."""
     payload = read_local_json(boundaries, "City boundary source")
     _require_wgs84(payload)
-    cities: dict[str, object] = {}
+    parts: dict[str, list] = {}
     geoids: dict[str, str] = {}
     for feature in payload["features"]:
         properties = feature["properties"]
         city = properties.get("CDTFA_CITY")
         if not city:
             continue
-        geometry = to_albers(shape(feature["geometry"]), city)
-        cities[city] = unary_union([cities[city], geometry]) if city in cities else geometry
+        parts.setdefault(city, []).append(to_albers(shape(feature["geometry"])))
         geoids.setdefault(city, properties.get("CENSUS_GEOID") or "")
-    return cities, geoids
+    return {city: _union_repaired(geoms, city, repairs) for city, geoms in parts.items()}, geoids
 
 
 def _pairs_for(utility: str, territory, cities: dict, geoids: dict, minimum_pct: float) -> list[dict[str, object]]:
@@ -301,8 +302,9 @@ def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> tuple[li
     """Measure each utility territory against every city polygon in equal-area space."""
     territory_repairs: dict[str, float] = {}
     city_repairs: dict[str, float] = {}
-    territories = _territories(lse_bytes, _albers(territory_repairs))
-    cities, geoids = _cities(boundaries, _albers(city_repairs))
+    to_albers = _albers()
+    territories = _territories(lse_bytes, to_albers, territory_repairs)
+    cities, geoids = _cities(boundaries, to_albers, city_repairs)
 
     rows = [
         row

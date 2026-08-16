@@ -77,11 +77,12 @@ function checkDecision(entry, reported, pair, pouAttribution, repairs = {}) {
     }
     // territoryInCityPct = intersection(territory, city) / territory. A repair to the
     // territory moves the denominator and a repair to the city moves the numerator, so
-    // both can inflate the ratio. Allow the merge only when the measured margin above
-    // the threshold still survives the worst case those repairs could account for.
-    const distortion = (repairs.territory?.[entry.territoryName] ?? 0) + (repairs.city?.[entry.city] ?? 0);
-    if (distortion > 0 && pair.territoryInCityPct - distortion < pouAttribution.mergeThresholdPct) {
-      throw new Error(`${entry.eiaName}: geometry repairs could move the overlap by ${distortion.toFixed(2)} points, which is more than its ${(pair.territoryInCityPct - pouAttribution.mergeThresholdPct).toFixed(2)}-point margin; review it and use an override`);
+    // either can inflate the ratio. Expressing a city-area repair in points of this
+    // ratio needs A_city / A_territory, which is at least 1 for a contained territory,
+    // so any unscaled tolerance understates it in the fail-open direction. Refuse.
+    const repaired = repairs.territory[entry.territoryName] ?? repairs.city[entry.city];
+    if (repaired !== undefined) {
+      throw new Error(`${entry.eiaName}: its territory or ${entry.city} needed a geometry repair moving ${repaired}% of that shape, so the measured overlap is not trustworthy for an automatic merge; review it and use an override`);
     }
   }
   if (entry.decision === 'override' && !entry.reason) throw new Error(`${entry.eiaName}: an override requires a reason`);
@@ -91,10 +92,13 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
   const band = conversionBand(pouAttribution);
   const capacity = new Map(pouInputs.netMetering.utilities.map((utility) => [utility.utility, utility]));
   const overlap = new Map(pouInputs.territoryOverlap.pairs.map((pair) => [overlapKey(pair.utility, pair.city), pair]));
-  const repairs = {
-    territory: pouInputs.territoryOverlap.repairedTerritoryAreaPct ?? {},
-    city: pouInputs.territoryOverlap.repairedCityAreaPct ?? {}
-  };
+  // Defaulting these to empty would silently disable the repair gate, which is the one
+  // outcome every other guard in this function exists to prevent.
+  const { repairedTerritoryAreaPct, repairedCityAreaPct } = pouInputs.territoryOverlap;
+  if (!repairedTerritoryAreaPct || !repairedCityAreaPct) {
+    throw new TypeError('data/pou-inputs.json must carry repairedTerritoryAreaPct and repairedCityAreaPct; regenerate it with scripts/build-pou-inputs.py');
+  }
+  const repairs = { territory: repairedTerritoryAreaPct, city: repairedCityAreaPct };
   const merged = new Map();
   const excluded = [];
 
