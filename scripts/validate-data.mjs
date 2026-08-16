@@ -51,7 +51,9 @@ for (const city of data.cities) {
   assert.ok(Math.abs(expectedLow - city.generationGwh.low) <= .11, `${city.name}: generation arithmetic drift`);
   const expectedHigh = city.effectiveCapacityMw * city.yieldRange[1] / 1000;
   assert.ok(Math.abs(expectedHigh - city.generationGwh.high) <= .11, `${city.name}: generation high arithmetic drift`);
-  const fiveYearsAgo = city.timeline.find((point) => point.year === city.timeline.at(-1).year - 5).mw;
+  const fiveYearsAgoPoint = city.timeline.find((point) => point.year === city.timeline.at(-1).year - 5);
+  assert.ok(fiveYearsAgoPoint, `${city.name}: five-year comparison point missing`);
+  const fiveYearsAgo = fiveYearsAgoPoint.mw;
   const expectedGrowth = fiveYearsAgo > 0 ? (city.capacityMw / fiveYearsAgo - 1) * 100 : null;
   if (expectedGrowth == null) assert.equal(city.growth5yPct, null, `${city.name}: growth should be unavailable`);
   else assert.ok(Math.abs(expectedGrowth - city.growth5yPct) <= .051, `${city.name}: growth arithmetic drift`);
