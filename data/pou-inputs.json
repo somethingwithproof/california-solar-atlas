@@ -4,6 +4,7 @@
     "basisNote": "Capacity basis is per utility; the Type column reports AC or DC.",
     "sourceName": "Form EIA-861 Net Metering",
     "sourceUrl": "https://www.eia.gov/electricity/data/eia861/",
+    "sourceSha256": "77ce49c60ac5a6bad50c442fc401aad5404a21da875dc5cbaba353af5ede54de",
     "utilities": [
       {
         "utility": "Los Angeles Department of Water & Power",
@@ -148,6 +149,7 @@
     "boundaryNote": "CEC states these service territory boundaries are approximate.",
     "sourceName": "CEC Electric Load Serving Entities (IOU & POU)",
     "sourceUrl": "https://cecgis-caenergy.opendata.arcgis.com/datasets/CAEnergy::electric-load-serving-entities-iou-pou/about",
+    "sourceSha256": "a37c7a65dfc1604134e0c27d277747481ae1626a32d8df5b511c9111c823c5b8",
     "pairs": [
       {
         "utility": "Alameda Power & Telecom",
