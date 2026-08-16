@@ -150,6 +150,17 @@ def validate_payload(payload: object) -> dict[str, Any]:
         if not isinstance(county, dict):
             raise ValueError(f"county[{index}] must be an object")
         require_keys(county, {"slug", "name", "capacityMw", "projects", "timeline", "allUtilityBenchmark"}, f"county[{index}]")
+        benchmark = county["allUtilityBenchmark"]
+        if not isinstance(benchmark, dict):
+            raise ValueError(f"county[{index}].allUtilityBenchmark must be an object")
+        require_keys(benchmark, {"year", "capacityMwAc", "basis", "sourceUrl"}, f"county[{index}].allUtilityBenchmark")
+        if not finite_number(benchmark["capacityMwAc"]):
+            raise ValueError(f"county[{index}].allUtilityBenchmark.capacityMwAc must be finite")
+        if not isinstance(benchmark["year"], int) or isinstance(benchmark["year"], bool):
+            raise ValueError(f"county[{index}].allUtilityBenchmark.year must be an integer")
+        for field in ("basis", "sourceUrl"):
+            if not isinstance(benchmark[field], str) or not benchmark[field].strip():
+                raise ValueError(f"county[{index}].allUtilityBenchmark.{field} must be a non-empty string")
         if not isinstance(county["timeline"], list):
             raise ValueError(f"county[{index}] timeline must be an array")
         if not isinstance(county["slug"], str) or not county["slug"] or not isinstance(county["name"], str) or not county["name"]:
@@ -191,7 +202,14 @@ def write_table(rows: list[dict[str, object]], destination: Path, arrow_schema: 
     columns = {column for row in rows for column in row}
     expected = set(arrow_schema.names)
     if columns != expected:
-        raise ValueError(f"{destination.name}: no row supplies required schema columns {sorted(expected - columns)}; restore the source field or intentionally revise the schema. Unexpected columns={sorted(columns - expected)}")
+        missing = sorted(expected - columns)
+        unexpected = sorted(columns - expected)
+        details = []
+        if missing:
+            details.append(f"missing required columns={missing}")
+        if unexpected:
+            details.append(f"unexpected columns={unexpected}")
+        raise ValueError(f"{destination.name}: schema columns differ: {'; '.join(details)}")
     normalized = [{column: row.get(column) for column in arrow_schema.names} for row in rows]
     pq.write_table(pa.Table.from_pylist(normalized, schema=arrow_schema), destination, compression="zstd", version="2.6")
 

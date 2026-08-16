@@ -1,5 +1,6 @@
 node_modules/
 dist/
 dist-data/
+.atlas-release-*
 .DS_Store
 *.zip

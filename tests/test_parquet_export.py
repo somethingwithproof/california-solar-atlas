@@ -33,7 +33,7 @@ class ExportParquetTests(unittest.TestCase):
     def payload() -> dict[str, object]:
         meta = {"schemaVersion": 1, "dataThrough": "January 1, 2026", "generatedAt": "2026-01-01T00:00:00Z", "capacityBasis": "test", "sourceCapacityMw": 1, "totalCapacityMw": 1, "allUtilityBenchmark": {"year": 2024, "statewideCapacityMwAc": 1, "basis": "test", "sourceUrl": "https://example.com"}}
         city = {"id": "city-1", "name": "City", "county": "County", "geoid": "0600001", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1, "addedMw": 1, "projects": 1}], "utilities": []}
-        county = {"slug": "county-1", "name": "County", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1}], "allUtilityBenchmark": {}}
+        county = {"slug": "county-1", "name": "County", "capacityMw": 1, "projects": 1, "timeline": [{"year": 2026, "mw": 1}], "allUtilityBenchmark": {"year": 2024, "capacityMwAc": 1, "basis": "test", "sourceUrl": "https://example.com"}}
         return {"meta": meta, "cities": [city], "counties": [county]}
 
     @staticmethod
@@ -82,6 +82,12 @@ class ExportParquetTests(unittest.TestCase):
                 payload["meta"]["allUtilityBenchmark"] = benchmark
                 with self.assertRaisesRegex(ValueError, "allUtilityBenchmark"):
                     export_parquet.validate_payload(payload)
+
+    def test_payload_validation_rejects_missing_county_benchmark(self) -> None:
+        payload = self.payload()
+        payload["counties"][0]["allUtilityBenchmark"] = {"capacityMwAc": None}
+        with self.assertRaisesRegex(ValueError, "allUtilityBenchmark"):
+            export_parquet.validate_payload(payload)
 
     def test_payload_validation_rejects_duplicate_join_keys(self) -> None:
         payload = self.payload()
@@ -157,9 +163,9 @@ class ExportParquetTests(unittest.TestCase):
         extra = [{**complete, "unexpected": 1}]
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "table.parquet"
-            with self.assertRaisesRegex(ValueError, "required schema columns"):
+            with self.assertRaisesRegex(ValueError, "missing required columns"):
                 export_parquet.write_table(missing, destination, export_parquet.CITY_SCHEMA)
-            with self.assertRaisesRegex(ValueError, "Unexpected"):
+            with self.assertRaisesRegex(ValueError, "unexpected columns"):
                 export_parquet.write_table(extra, destination, export_parquet.CITY_SCHEMA)
 
     def test_prepare_output_rejects_existing_file(self) -> None:
@@ -239,6 +245,12 @@ class ExportParquetTests(unittest.TestCase):
         import parquet_schema
         self.assertEqual(parquet_schema.fingerprints(), validate_parquet.SCHEMA_FINGERPRINTS)
 
+    def test_required_column_validation_rejects_nulls(self) -> None:
+        schema = pa.schema([pa.field("required", pa.int64(), nullable=False)])
+        table = pa.Table.from_arrays([pa.array([None], type=pa.int64())], schema=schema)
+        with self.assertRaisesRegex(validate_parquet.ValidationError, "required but contains null"):
+            validate_parquet.verify_required_columns(table, "test")
+
     def test_production_payload_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "release"
@@ -253,6 +265,16 @@ class ExportParquetTests(unittest.TestCase):
             metadata["matchedCityCapacityMwDc"] += 1
             metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
             self.assert_validation_fails(output, source, "does not match canonical JSON")
+            metadata_path.write_text(original_metadata, encoding="utf-8")
+            for field, value, message in (
+                ("sourceSha256", "0" * 64, "source digest"),
+                ("schemaVersion", -1, "schema version"),
+            ):
+                with self.subTest(metadata_field=field):
+                    metadata = json.loads(original_metadata)
+                    metadata[field] = value
+                    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+                    self.assert_validation_fails(output, source, message)
             metadata_path.write_text(original_metadata, encoding="utf-8")
             self.rewrite_manifest(output)
             table_path = output / "cities.parquet"
@@ -298,6 +320,17 @@ class ExportParquetTests(unittest.TestCase):
             pq.write_table(mutated, timeline_path, compression="zstd", version="2.6")
             self.assert_validation_fails(output, source, "City timeline joins or row counts are corrupted")
             timeline_path.write_bytes(original_timeline)
+
+            county_timeline_path = output / "county-timeline.parquet"
+            original_county_timeline = county_timeline_path.read_bytes()
+            table = pq.read_table(county_timeline_path)
+            values = table.column("mw").to_pylist()
+            values[0] += 1
+            index = table.schema.get_field_index("mw")
+            mutated = table.set_column(index, table.schema.field(index), pa.array(values, type=pa.float64()))
+            pq.write_table(mutated, county_timeline_path, compression="zstd", version="2.6")
+            self.assert_validation_fails(output, source, "County timeline values do not match")
+            county_timeline_path.write_bytes(original_county_timeline)
 
             table = pq.read_table(timeline_path).slice(1)
             pq.write_table(table, timeline_path, compression="zstd", version="2.6")
