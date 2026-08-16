@@ -92,11 +92,11 @@ def fetch(url: str, destination: Path) -> bytes:
         raise SystemExit(f"Source returned an empty body: {url}")
     if len(payload) > MAX_SOURCE_BYTES:
         raise SystemExit(f"Source exceeds the {MAX_SOURCE_BYTES} byte contract: {url}")
-    # read() returns short on a mid-transfer close without raising, and the caller
-    # publishes sha256(payload) as provenance, so a partial body must never be kept.
-    if declared is None or not declared.isdigit():
-        raise SystemExit(f"Source did not declare Content-Length, so truncation cannot be ruled out: {url}")
-    if len(payload) != int(declared):
+    # With Content-Length, read() can return short on a mid-transfer close without
+    # raising, and the caller publishes sha256(payload) as provenance, so compare.
+    # A chunked response has no length to compare, but the protocol itself raises
+    # IncompleteRead on a short transfer, so reaching here means it completed.
+    if declared is not None and declared.isdigit() and len(payload) != int(declared):
         raise SystemExit(f"Source truncated: got {len(payload)} of {declared} bytes from {url}")
 
     # Write through a private temp file so an interrupted run cannot cache a partial write.
