@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import math
+import shutil
 import tempfile
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +24,7 @@ INT64_MAX = 2**63 - 1
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_INPUT = PROJECT_ROOT / "public" / "data" / "cities.json"
 CANONICAL_OUTPUT = PROJECT_ROOT / "dist-data"
+RELEASE_MARKER = "metadata.json"
 
 
 def finite_number(value: object) -> bool:
@@ -271,7 +274,7 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         asset.chmod(0o644)
 
 
-def prepare_output(output: Path) -> None:
+def prepare_output(output: Path, *, replace: bool = False) -> None:
     """Require an absent or empty directory and prepare for an atomic rename."""
     output.parent.mkdir(parents=True, exist_ok=True)
     if not output.exists():
@@ -279,14 +282,21 @@ def prepare_output(output: Path) -> None:
     if not output.is_dir():
         raise RuntimeError(f"Output path exists and is not a directory: {output}")
     if any(output.iterdir()):
-        raise RuntimeError(f"Output directory is not empty: {output}")
+        if not replace:
+            raise RuntimeError(f"Output directory is not empty: {output} (pass --replace to overwrite a previous release)")
+        # Only a directory this exporter wrote may be removed; the marker keeps
+        # --replace from deleting an unrelated path someone pointed the run at.
+        if not (output / RELEASE_MARKER).is_file():
+            raise RuntimeError(f"Refusing to replace {output}: no {RELEASE_MARKER} from a previous release")
+        shutil.rmtree(output)
+        return
     try:
         output.rmdir()
     except OSError as error:
         raise RuntimeError(f"Could not prepare output directory {output}: {error}") from error
 
 
-def run(input_path: Path, output_path: Path) -> None:
+def run(input_path: Path, output_path: Path, *, replace: bool = False) -> None:
     """Run a transactional export and present source errors without a traceback."""
     input_size = input_path.stat().st_size
     if input_size <= 0 or input_size > MAX_INPUT_BYTES:
@@ -295,7 +305,7 @@ def run(input_path: Path, output_path: Path) -> None:
     payload = validate_payload(
         json.loads(source_bytes, parse_constant=reject_nonfinite_json, parse_float=parse_json_float)
     )
-    prepare_output(output_path)
+    prepare_output(output_path, replace=replace)
 
     # Keeping staging under the output parent makes the final rename atomic on one filesystem.
     with tempfile.TemporaryDirectory(prefix=".atlas-release-", dir=output_path.parent) as temporary:
@@ -306,8 +316,11 @@ def run(input_path: Path, output_path: Path) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--replace", action="store_true", help="overwrite a previous release in the output directory")
+    options = parser.parse_args()
     try:
-        run(CANONICAL_INPUT, CANONICAL_OUTPUT)
+        run(CANONICAL_INPUT, CANONICAL_OUTPUT, replace=options.replace)
     except (OSError, OverflowError, RuntimeError, TypeError, ValueError) as error:
         raise SystemExit(f"Release export failed: {error}") from error
 
