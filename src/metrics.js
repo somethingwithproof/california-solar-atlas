@@ -23,8 +23,8 @@ export const metricConfig = {
     // Ranking and shading need one number, and the reported floor is a real figure;
     // the midpoint of the conversion band is not.
     value: capacityFloor,
-    display: (value) => `${format.format(value)} MW`,
-    displayCity: (city) => rangeText(capacityRange(city), 'MW')
+    display: (value) => `${format.format(value)} MW-DC`,
+    displayCity: (city) => rangeText(capacityRange(city), 'MW-DC')
   },
   generation: {
     label: 'Estimated generation', short: 'GWh/year',

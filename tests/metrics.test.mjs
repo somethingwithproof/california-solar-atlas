@@ -39,11 +39,11 @@ test('ranking and shading use the reported floor, never a synthesized midpoint',
 
 test('a city without municipal capacity collapses to a single value', () => {
   assert.deepEqual(capacityRange(iouOnly), { low: 154.8, high: 154.8 });
-  assert.equal(metricDisplay(metricConfig.capacityMw, iouOnly), '154.8 MW');
+  assert.equal(metricDisplay(metricConfig.capacityMw, iouOnly), '154.8 MW-DC');
 });
 
 test('a city with municipal capacity shows the band', () => {
-  assert.equal(metricDisplay(metricConfig.capacityMw, withMunicipal), '760.4–875.7 MW');
+  assert.equal(metricDisplay(metricConfig.capacityMw, withMunicipal), '760.4–875.7 MW-DC');
   assert.equal(metricDisplay(metricConfig.generation, withMunicipal), '1,009.8–1,399.7 GWh');
 });
 

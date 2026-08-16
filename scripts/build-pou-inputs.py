@@ -71,9 +71,10 @@ def fetch(url: str, destination: Path) -> bytes:
     if destination.is_symlink():
         raise SystemExit(f"Refusing to use a symlinked cache entry: {destination}")
     if destination.is_file():
-        cached = destination.read_bytes()
-        if not 0 < len(cached) <= MAX_SOURCE_BYTES:
+        cached_size = destination.stat().st_size
+        if not 0 < cached_size <= MAX_SOURCE_BYTES:
             raise SystemExit(f"Cached source is empty or oversize; delete it and retry: {destination}")
+        cached = destination.read_bytes()
         # The caller publishes sha256(bytes) as upstream provenance, so a cached file is
         # only trustworthy if it still matches what the server is serving today. This
         # catches both a short earlier download and a stale prior-year release.
@@ -112,7 +113,7 @@ def fetch(url: str, destination: Path) -> bytes:
     return payload
 
 
-def read_local_json(path: Path, label: str) -> object:
+def read_local_json(path: Path, label: str) -> dict:
     """Read a caller-supplied JSON file only after it passes the same checks as a download."""
     # Test the given path, not the resolved one: resolve() follows the link, so asking
     # the resolved path whether it is a symlink can never be true.
@@ -125,7 +126,10 @@ def read_local_json(path: Path, label: str) -> object:
     if not 0 < size <= MAX_SOURCE_BYTES:
         raise SystemExit(f"{label} is empty or exceeds the {MAX_SOURCE_BYTES} byte contract: {resolved}")
     with resolved.open("rb") as handle:
-        return json.loads(handle.read(MAX_SOURCE_BYTES))
+        payload = json.loads(handle.read(MAX_SOURCE_BYTES))
+    if not isinstance(payload, dict) or not isinstance(payload.get("features"), list):
+        raise SystemExit(f"{label} must be a GeoJSON object with a features array: {resolved}")
+    return payload
 
 
 def only_column(columns: list[str], predicate, label: str) -> str:
@@ -227,7 +231,7 @@ def _require_wgs84(payload: dict) -> None:
                 raise SystemExit(f"City boundary coordinate {longitude}, {latitude} is outside California; check the CRS")
 
 
-def _first_points(geometry: object, budget: int = 5) -> list[tuple[float, float]]:
+def _first_points(geometry: object) -> list[tuple[float, float]]:
     """Pull a few leaf coordinate pairs without walking an entire polygon."""
     if not isinstance(geometry, dict):
         return []
