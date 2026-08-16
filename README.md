@@ -48,7 +48,7 @@ The scripts keep the large raw files outside the repository and emit compact cit
 - Solar share is shown only for cities with an explicitly onboarded load record and equals degradation-adjusted gross generation divided by grid deliveries plus degradation-adjusted gross generation.
 - Service-city strings are not a parcel-level spatial join. The interface discloses this and other limitations prominently.
 - Population follows legal city boundaries and is descriptive only. The application does not divide it into service-city capacity or publish a per-resident ranking.
-- Storage-linked sites are counted, but aggregate MWh is withheld because the source `Storage Capacity (kWh)` field contains inconsistent scales relative to storage kW.
+- Storage-linked sites are counted, but aggregate MWh is withheld because the source `Storage Capacity (kWh)` field contains inconsistent scales relative to storage kW. Negative and nonnumeric source values are excluded and counted in the published data-quality fields.
 - The source ZIP contains PG&E, SCE, and SDG&E files. Municipal utility systems such as LADWP and SMUD are outside its coverage, so affected city totals are lower bounds.
 - Historical charts group currently listed projects by approval date. They are labeled as a proxy because superseding applications can change the apparent vintage.
 

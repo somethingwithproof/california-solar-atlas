@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig(({ command }) => ({
+  base: process.env.BASE_PATH || '/',
   plugins: command === 'serve' ? [{
     name: 'development-csp',
     transformIndexHtml(html) {

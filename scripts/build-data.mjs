@@ -52,20 +52,26 @@ function key(value = '') {
 function officialCities() {
   const lines = readFileSync(sources.cities, 'utf8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
   const header = parseCsv(lines.shift());
-  const indexes = requireHeaders(header, ['CDTFA_CITY', 'CDTFA_COUNTY', 'CENSUS_GEOID'], 'California city identifiers');
+  const indexes = requireHeaders(header, ['CDTFA_COPRI', 'CDTFA_CITY', 'CDTFA_COUNTY', 'CENSUS_GEOID'], 'California city identifiers');
   const cities = new Map();
   for (const line of lines) {
     const row = parseCsv(line);
     const name = row[indexes.CDTFA_CITY]?.trim();
     if (!name) continue;
+    const cdtfaCode = row[indexes.CDTFA_COPRI]?.trim();
+    const geoid = row[indexes.CENSUS_GEOID]?.trim() || null;
+    if (!cdtfaCode) throw new Error(`${name}: missing CDTFA city identifier`);
+    if (geoid && !/^06\d{5}$/.test(geoid)) throw new Error(`${name}: invalid California place GEOID`);
     const id = key(name);
     if (!cities.has(id)) cities.set(id, {
+      id: geoid || `cdtfa-${cdtfaCode}`,
       name,
       county: (row[indexes.CDTFA_COUNTY] || '').replace(/ County$/, ''),
-      geoid: row[indexes.CENSUS_GEOID] || null,
+      geoid,
       capacityKw: 0,
       projects: 0,
       storageProjects: 0,
+      storageInvalidValues: 0,
       utilities: new Set(),
       byYear: new Map(),
       sectors: { residential: { kw: 0, projects: 0 }, commercial: { kw: 0, projects: 0 }, public: { kw: 0, projects: 0 }, other: { kw: 0, projects: 0 } }
@@ -79,11 +85,15 @@ function addGazetteer(cities) {
   const rows = readFileSync(sources.gazetteer, 'utf8').trim().split(/\r?\n/);
   const header = rows.shift().trim().split(/\t/).map((value) => value.trim());
   const indexes = requireHeaders(header, ['GEOID', 'INTPTLAT', 'INTPTLONG'], 'Census Gazetteer');
-  const byGeoid = new Map([...new Set(cities.values())].map((city) => [city.geoid, city]));
+  const byGeoid = new Map([...new Set(cities.values())].filter((city) => city.geoid).map((city) => [city.geoid, city]));
   for (const line of rows) {
     const row = line.split(/\t/).map((value) => value.trim());
     const city = byGeoid.get(row[indexes.GEOID]);
-    if (city) city.coordinates = [Number(row[indexes.INTPTLONG]), Number(row[indexes.INTPTLAT])];
+    if (!city) continue;
+    const longitude = Number(row[indexes.INTPTLONG]);
+    const latitude = Number(row[indexes.INTPTLAT]);
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || longitude < -125 || longitude > -113 || latitude < 32 || latitude > 43) throw new Error(`${city.name}: invalid or out-of-state Gazetteer coordinate`);
+    city.coordinates = [longitude, latitude];
   }
 }
 
@@ -179,14 +189,20 @@ async function aggregateEntry(entry, cities) {
       indexes = Object.fromEntries(fields.map(([field, name]) => [field, header.indexOf(name)]));
       continue;
     }
+    if (!line.trim() || /^Generated \d{4}-\d{2}-\d{2}T/.test(line)) continue;
     const row = parseCsv(line);
+    if (row.length <= Math.max(...Object.values(indexes))) throw new Error(`${entry}: incomplete CSV row`);
     if (!/photovoltaic/i.test(row[indexes.technology] || '')) continue;
     const capacityKw = Number(row[indexes.capacity]);
     if (!Number.isFinite(capacityKw) || capacityKw <= 0) continue;
     const city = cities.get(key(row[indexes.city]));
     if (!city) continue;
     const sector = sectorKey(row[indexes.sector]);
-    const storageKwh = Number(row[indexes.storage]) || 0;
+    const storageRaw = (row[indexes.storage] || '').trim();
+    const parsedStorageKwh = storageRaw ? Number(storageRaw) : 0;
+    const storageIsValid = Number.isFinite(parsedStorageKwh) && parsedStorageKwh >= 0;
+    if (!storageIsValid) city.storageInvalidValues += 1;
+    const storageKwh = storageIsValid ? parsedStorageKwh : 0;
     city.capacityKw += capacityKw;
     city.projects += 1;
     city.utilities.add(row[indexes.utility] || 'Unknown');
@@ -209,7 +225,7 @@ const cities = officialCities();
 addGazetteer(cities);
 addPopulation(cities);
 addClimateZones(cities);
-const uniqueCities = new Map([...cities.values()].map((city) => [city.geoid || city.name, city]));
+const uniqueCities = new Map([...cities.values()].map((city) => [city.id, city]));
 const entries = await zipEntries();
 if (!dataThrough) dataThrough = inferDataThrough(entries);
 for (const entry of entries) {
@@ -242,6 +258,7 @@ const records = [...uniqueCities.values()].map((city) => {
   const record = {
     name: city.name,
     county: city.county,
+    id: city.id,
     geoid: city.geoid,
     coordinates: city.coordinates || null,
     population,
@@ -255,6 +272,7 @@ const records = [...uniqueCities.values()].map((city) => {
     projects: city.projects,
     averageSystemKw: city.projects ? Number((city.capacityKw / city.projects).toFixed(1)) : 0,
     storageProjects: city.storageProjects,
+    storageInvalidValues: city.storageInvalidValues,
     storageCapacityStatus: 'withheld-source-units-inconsistent',
     growth5yPct,
     utilities: [...city.utilities].sort(),
@@ -271,7 +289,7 @@ const records = [...uniqueCities.values()].map((city) => {
 
 const payload = {
   meta: {
-    schemaVersion: 3,
+    schemaVersion: 4,
     cityCount: records.length,
     totalCapacityMw: Number(records.reduce((sum, city) => sum + city.capacityMw, 0).toFixed(3)),
     populationCoverage: records.filter((city) => city.population).length,
@@ -280,6 +298,7 @@ const payload = {
     generatedAt: new Date().toISOString(),
     capacityBasis: 'System Size DC (kW), positive values only',
     storageCapacityStatus: 'withheld-source-units-inconsistent',
+    storageInvalidValues: records.reduce((sum, city) => sum + city.storageInvalidValues, 0),
     generationYield: { method: 'CEC climate-zone fleet bands', low: 1250, high: 1750, degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
     sources: [
       { name: 'California Distributed Generation Statistics', role: 'Interconnected project sites', url: 'https://www.californiadgstats.ca.gov/downloads/' },
