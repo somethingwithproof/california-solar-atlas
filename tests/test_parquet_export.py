@@ -116,12 +116,14 @@ class ExportParquetTests(unittest.TestCase):
 
     def test_write_table_rejects_missing_and_extra_schema_fields(self) -> None:
         complete = {name: None for name in export_parquet.CITY_SCHEMA.names}
+        missing = [{key: value for key, value in complete.items() if key != "id"}]
+        extra = [{**complete, "unexpected": 1}]
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary) / "table.parquet"
             with self.assertRaisesRegex(ValueError, "required schema columns"):
-                export_parquet.write_table([{key: value for key, value in complete.items() if key != "id"}], destination, export_parquet.CITY_SCHEMA)
+                export_parquet.write_table(missing, destination, export_parquet.CITY_SCHEMA)
             with self.assertRaisesRegex(ValueError, "Unexpected"):
-                export_parquet.write_table([{**complete, "unexpected": 1}], destination, export_parquet.CITY_SCHEMA)
+                export_parquet.write_table(extra, destination, export_parquet.CITY_SCHEMA)
 
     def test_prepare_output_rejects_existing_file(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -200,11 +202,11 @@ class ExportParquetTests(unittest.TestCase):
         import parquet_schema
         self.assertEqual(parquet_schema.fingerprints(), validate_parquet.SCHEMA_FINGERPRINTS)
 
-    def test_production_payload_round_trip_runs_both_entry_points(self) -> None:
+    def test_production_payload_round_trip(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / "release"
             source = ROOT / "public" / "data" / "cities.json"
-            subprocess.run([sys.executable, str(SCRIPT), "--input", str(source), "--output", str(output)], cwd=ROOT, check=True)
+            export_parquet.run(source, output)
             subprocess.run([sys.executable, str(VALIDATOR_SCRIPT), str(output), "--source", str(source)], cwd=ROOT, check=True)
             self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o755)
             metadata_path = output / "metadata.json"

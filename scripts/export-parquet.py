@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import math
@@ -17,6 +16,9 @@ import pyarrow.parquet as pq
 from parquet_schema import CITY_SCHEMA, CITY_TIMELINE_SCHEMA, COUNTY_SCHEMA, COUNTY_TIMELINE_SCHEMA
 
 MAX_INPUT_BYTES = 25_000_000
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+CANONICAL_INPUT = PROJECT_ROOT / "public" / "data" / "cities.json"
+CANONICAL_OUTPUT = PROJECT_ROOT / "dist-data"
 
 
 def finite_number(value: object) -> bool:
@@ -220,12 +222,8 @@ def run(input_path: Path, output_path: Path) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--input", type=Path, default=Path("public/data/cities.json"))
-    parser.add_argument("--output", type=Path, default=Path("dist-data"))
-    args = parser.parse_args()
     try:
-        run(args.input, args.output)
+        run(CANONICAL_INPUT, CANONICAL_OUTPUT)
     except (OSError, RuntimeError, TypeError, ValueError) as error:
         raise SystemExit(f"Release export failed: {error}") from error
 

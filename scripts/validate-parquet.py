@@ -11,6 +11,7 @@ import string
 from collections import Counter
 from pathlib import Path
 
+import pyarrow as pa
 import pyarrow.parquet as pq
 
 MAX_INPUT_BYTES = 25_000_000
@@ -58,14 +59,14 @@ def verify_checksums(directory: Path) -> None:
         check(observed == digest, f"Checksum mismatch for {filename}: expected {digest}, found {observed}")
 
 
-def verify_schema(name: str, schema: object) -> None:
+def verify_schema(name: str, schema: pa.Schema) -> None:
     """Pin the public wire types independently from the exporter schema module."""
     canonical = "\n".join(f"{field.name}:{field.type}:{'nullable' if field.nullable else 'required'}" for field in schema)
     observed = hashlib.sha256(canonical.encode()).hexdigest()
     check(observed == SCHEMA_FINGERPRINTS[name], f"{name} Parquet schema fingerprint drifted: {observed}")
 
 
-def verify_required_columns(table: object, name: str) -> None:
+def verify_required_columns(table: pa.Table, name: str) -> None:
     """Verify that every field published as required contains no null values."""
     for field in table.schema:
         if not field.nullable:
