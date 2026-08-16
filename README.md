@@ -10,7 +10,7 @@ The interface is designed for GitHub Pages: no server, database, API keys, or ru
 - Climate-zone and vintage-adjusted annual generation ranges
 - Reported capacity, five-year growth, project counts, customer sectors, and storage-linked site counts
 - Interactive statewide choropleth using official incorporated-city polygons
-- Rankings with population and utility-coverage controls; per-resident ranking is withheld because the numerator and denominator use incompatible geographies
+- Rankings with population, utility-coverage, and mailing-geography controls; per-resident ranking is withheld because the numerator and denominator use incompatible geographies
 - Four-city comparison
 - Shareable city URLs plus CSV and SVG downloads
 - Explicit measured, modeled, partial-coverage, and unavailable states
@@ -48,11 +48,14 @@ The scripts keep the large raw files outside the repository and emit compact cit
 - Solar share is shown only for cities with an explicitly onboarded load record and equals degradation-adjusted gross generation divided by grid deliveries plus degradation-adjusted gross generation.
 - Service-city strings are not a parcel-level spatial join. The interface discloses this and other limitations prominently.
 - Population follows legal city boundaries and is descriptive only. The application does not divide it into service-city capacity or publish a per-resident ranking.
+- The 2026 Department of Finance E-1H housing estimate provides a screening diagnostic: cities where residential project sites exceed 35% of legal-boundary housing units are flagged as likely mailing inflation and excluded from rankings by default. The flag does not correct or replace the service-city total.
 - Storage-linked sites are counted, but aggregate MWh is withheld because the source `Storage Capacity (kWh)` field contains inconsistent scales relative to storage kW. Negative and nonnumeric source values are excluded and counted in the published data-quality fields.
 - The source ZIP contains PG&E, SCE, and SDG&E files. Municipal utility systems such as LADWP and SMUD are outside its coverage, so affected city totals are lower bounds.
 - Historical charts group currently listed projects by approval date. They are labeled as a proxy because superseding applications can change the apparent vintage.
 
 Run `npm test` to validate schema, city coverage, capacity, generation arithmetic, climate zones, population matches, and known utility warnings.
+
+See [the data correctness audit](docs/data-audit.md) for the capacity-column verification, San Jose storage spot check, and mailing-geography diagnostic.
 
 ## Security and dependency maintenance
 

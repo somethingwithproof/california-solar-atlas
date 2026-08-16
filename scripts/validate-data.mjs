@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 const data = JSON.parse(readFileSync(resolve(import.meta.dirname, '../public/data/cities.json'), 'utf8'));
 const boundaries = JSON.parse(readFileSync(resolve(import.meta.dirname, '../public/data/boundaries.json'), 'utf8'));
-assert.equal(data.meta.schemaVersion, 4, 'Unexpected data schema');
+assert.equal(data.meta.schemaVersion, 5, 'Unexpected data schema');
 assert.equal(data.meta.capacityBasis, 'System Size DC (kW), positive values only', 'Capacity basis drifted');
 assert.equal(data.meta.storageCapacityStatus, 'withheld-source-units-inconsistent', 'Storage uncertainty must stay explicit');
 assert.ok(Number.isInteger(data.meta.storageInvalidValues) && data.meta.storageInvalidValues >= 0, 'Invalid storage-value count missing');
@@ -20,6 +20,8 @@ for (const city of data.cities) {
 }
 assert.ok(data.meta.coordinateCoverage >= 480, 'Coordinate coverage regressed');
 assert.ok(data.meta.populationCoverage >= 470, 'Population coverage regressed');
+assert.ok(data.meta.housingCoverage >= 470, 'Housing-unit coverage regressed');
+assert.ok(data.meta.geographyRiskCities > 0, 'Geography diagnostic failed to flag any cities');
 assert.ok(Object.keys(boundaries).length >= 480, 'Municipal boundary coverage regressed');
 for (const [geoid, path] of Object.entries(boundaries)) {
   assert.match(geoid, /^06\d{5}$/, `${geoid}: invalid California place GEOID`);
@@ -42,6 +44,13 @@ for (const city of data.cities) {
   assert.ok(city.generationGwh.low <= city.generationGwh.high, `${city.name}: invalid generation range`);
   if (city.climateZone) assert.ok(city.climateZone >= 1 && city.climateZone <= 16, `${city.name}: invalid climate zone`);
   assert.equal(city.wattsPerPerson, undefined, `${city.name}: geography-mismatched per-capita metric must not be published`);
+  assert.ok(['likely-mailing-inflation', 'not-flagged'].includes(city.geographyRisk), `${city.name}: invalid geography diagnostic`);
+  if (city.housingUnits) {
+    assert.ok(Number.isInteger(city.housingUnits) && city.housingUnits > 0, `${city.name}: invalid housing-unit estimate`);
+    const expectedHousingRatio = city.sectors.residential.projects / city.housingUnits * 100;
+    assert.ok(Math.abs(expectedHousingRatio - city.residentialSiteHousingPct) <= .051, `${city.name}: housing diagnostic arithmetic drift`);
+    assert.equal(city.geographyRisk === 'likely-mailing-inflation', city.residentialSiteHousingPct > 35, `${city.name}: geography flag threshold drift`);
+  }
   assert.equal(city.storageMwh, undefined, `${city.name}: unvalidated storage capacity must not be published`);
   assert.equal(city.storageCapacityStatus, 'withheld-source-units-inconsistent', `${city.name}: storage warning missing`);
   assert.ok(Number.isInteger(city.projects) && city.projects >= 0, `${city.name}: invalid project count`);
@@ -84,6 +93,8 @@ assert.equal(pleasanton.climateZone, 12, 'Pleasanton climate-zone regression');
 assert.equal(pleasanton.load.kind, 'modeled', 'Pleasanton load must remain visibly modeled');
 const sanJose = data.cities.find((city) => city.name === 'San Jose');
 assert.ok(sanJose && sanJose.capacityMw > 0 && sanJose.projects > 0, 'San Jose smoke check failed');
+const grassValley = data.cities.find((city) => city.name === 'Grass Valley');
+assert.equal(grassValley.geographyRisk, 'likely-mailing-inflation', 'Grass Valley mailing-geography warning missing');
 
 const losAngeles = data.cities.find((city) => city.name === 'Los Angeles');
 assert.equal(losAngeles.coverage.status, 'partial', 'LADWP coverage warning missing');

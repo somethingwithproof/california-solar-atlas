@@ -100,23 +100,27 @@ function addGazetteer(cities) {
 function addPopulation(cities) {
   const stringsXml = execFileSync('unzip', ['-p', sources.population, 'xl/sharedStrings.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
   const strings = (stringsXml.match(/<si[\s>][\s\S]*?<\/si>/g) || []).map(decodeXml);
-  const sheet = execFileSync('unzip', ['-p', sources.population, 'xl/worksheets/sheet2.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
-  const rows = sheet.match(/<row[\s>][\s\S]*?<\/row>/g) || [];
   const countyKeys = new Set([...new Set(cities.values())].map((city) => key(city.county)));
-  let currentCounty = '';
-  for (const xml of rows) {
-    const values = {};
-    for (const cell of xml.match(/<c[\s>][\s\S]*?<\/c>/g) || []) {
-      const column = cell.match(/ r="([A-Z]+)\d+"/)?.[1];
-      const raw = cell.match(/<v>(.*?)<\/v>/)?.[1];
-      values[column] = cell.includes(' t="s"') ? strings[Number(raw)] : raw;
+  const addSheetValues = (sheetPath, property) => {
+    const sheet = execFileSync('unzip', ['-p', sources.population, sheetPath], { encoding: 'utf8', maxBuffer: 20_000_000 });
+    const rows = sheet.match(/<row[\s>][\s\S]*?<\/row>/g) || [];
+    let currentCounty = '';
+    for (const xml of rows) {
+      const values = {};
+      for (const cell of xml.match(/<c[\s>][\s\S]*?<\/c>/g) || []) {
+        const column = cell.match(/ r="([A-Z]+)\d+"/)?.[1];
+        const raw = cell.match(/<v>(.*?)<\/v>/)?.[1];
+        values[column] = cell.includes(' t="s"') ? strings[Number(raw)] : raw;
+      }
+      const nameKey = key(values.A);
+      if (!nameKey || nameKey === 'CALIFORNIA' || nameKey === 'STATECOUNTYCITY') continue;
+      if (countyKeys.has(nameKey) && nameKey !== currentCounty) { currentCounty = nameKey; continue; }
+      const city = cities.get(nameKey);
+      if (city && key(city.county) === currentCounty && Number(values.C) > 0) city[property] = Number(values.C);
     }
-    const nameKey = key(values.A);
-    if (!nameKey || nameKey === 'CALIFORNIA' || nameKey === 'STATECOUNTYCITY') continue;
-    if (countyKeys.has(nameKey) && nameKey !== currentCounty) { currentCounty = nameKey; continue; }
-    const city = cities.get(nameKey);
-    if (city && key(city.county) === currentCounty && Number(values.C) > 0) city.population = Number(values.C);
-  }
+  };
+  addSheetValues('xl/worksheets/sheet2.xml', 'population');
+  addSheetValues('xl/worksheets/sheet4.xml', 'housingUnits');
 }
 
 function pointInRing([x, y], ring) {
@@ -255,6 +259,9 @@ const records = [...uniqueCities.values()].map((city) => {
   const fiveYearsAgo = timeline.find((point) => point.year === currentYear - 5)?.mw || 0;
   const growth5yPct = fiveYearsAgo > 0 ? Number(((capacityMw / fiveYearsAgo - 1) * 100).toFixed(1)) : null;
   const sectors = Object.fromEntries(Object.entries(city.sectors).map(([name, value]) => [name, { mw: Number((value.kw / 1000).toFixed(3)), projects: value.projects }]));
+  const housingUnits = city.housingUnits || null;
+  const residentialSiteHousingPct = housingUnits ? Number((sectors.residential.projects / housingUnits * 100).toFixed(1)) : null;
+  const geographyRisk = residentialSiteHousingPct > 35 ? 'likely-mailing-inflation' : 'not-flagged';
   const record = {
     name: city.name,
     county: city.county,
@@ -263,6 +270,10 @@ const records = [...uniqueCities.values()].map((city) => {
     coordinates: city.coordinates || null,
     population,
     populationYear: population ? 2026 : null,
+    housingUnits,
+    housingYear: housingUnits ? 2026 : null,
+    residentialSiteHousingPct,
+    geographyRisk,
     capacityMw,
     effectiveCapacityMw: Number((effectiveKw / 1000).toFixed(3)),
     degradationRatePct: 0.5,
@@ -289,10 +300,12 @@ const records = [...uniqueCities.values()].map((city) => {
 
 const payload = {
   meta: {
-    schemaVersion: 4,
+    schemaVersion: 5,
     cityCount: records.length,
     totalCapacityMw: Number(records.reduce((sum, city) => sum + city.capacityMw, 0).toFixed(3)),
     populationCoverage: records.filter((city) => city.population).length,
+    housingCoverage: records.filter((city) => city.housingUnits).length,
+    geographyRiskCities: records.filter((city) => city.geographyRisk === 'likely-mailing-inflation').length,
     coordinateCoverage: records.filter((city) => city.coordinates).length,
     dataThrough,
     generatedAt: new Date().toISOString(),
@@ -302,7 +315,7 @@ const payload = {
     generationYield: { method: 'CEC climate-zone fleet bands', low: 1250, high: 1750, degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
     sources: [
       { name: 'California Distributed Generation Statistics', role: 'Interconnected project sites', url: 'https://www.californiadgstats.ca.gov/downloads/' },
-      { name: 'California Department of Finance E-1', role: '2026 city population estimates', url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
+      { name: 'California Department of Finance E-1/E-1H', role: '2026 city population and housing estimates', url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
       { name: 'U.S. Census Gazetteer', role: 'City representative coordinates', url: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.2024.html' },
       { name: 'California Energy Commission', role: 'Building climate-zone polygons', url: 'https://www.energy.ca.gov/files/building-climate-zones-map' }
     ]
