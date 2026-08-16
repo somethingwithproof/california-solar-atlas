@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "data:build": "node scripts/build-data.mjs",
     "data:boundaries": "node scripts/build-boundaries.mjs",
-    "test": "node scripts/validate-data.mjs"
+    "test": "node --test tests/*.test.mjs && node scripts/validate-data.mjs"
   },
   "devDependencies": {
     "proj4": "^2.21.0",
