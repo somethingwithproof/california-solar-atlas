@@ -86,6 +86,18 @@ def fetch(url: str, destination: Path) -> bytes:
     return payload
 
 
+def read_local_json(path: Path, label: str) -> object:
+    """Read a caller-supplied JSON file only after it passes the same checks as a download."""
+    resolved = path.resolve()
+    if resolved.is_symlink() or not resolved.is_file():
+        raise SystemExit(f"{label} must be an existing regular file: {resolved}")
+    size = resolved.stat().st_size
+    if not 0 < size <= MAX_SOURCE_BYTES:
+        raise SystemExit(f"{label} is empty or exceeds the {MAX_SOURCE_BYTES} byte contract: {resolved}")
+    with resolved.open("rb") as handle:
+        return json.loads(handle.read(MAX_SOURCE_BYTES))
+
+
 def only_column(columns: list[str], predicate, label: str) -> str:
     """Resolve exactly one column, so a renamed or added column fails loudly."""
     matches = [column for column in columns if predicate(column)]
@@ -141,14 +153,19 @@ def territory_features(lse_bytes: bytes) -> list[dict[str, object]]:
     return features
 
 
-def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dict[str, object]]:
-    """Measure each utility territory against every city polygon in equal-area space."""
+def _albers():
+    """Return a projector into EPSG:3310, the equal-area basis for these ratios."""
     project = Transformer.from_crs("EPSG:4326", "EPSG:3310", always_xy=True).transform
 
     def to_albers(geometry):
         geometry = geometry if geometry.is_valid else geometry.buffer(0)
         return transform(project, geometry)
 
+    return to_albers
+
+
+def _territories(lse_bytes: bytes, to_albers) -> dict[str, object]:
+    """Union every feature belonging to one utility into a single territory."""
     territories: dict[str, object] = {}
     for feature in territory_features(lse_bytes):
         utility = feature["properties"]["Utility"]
@@ -158,10 +175,14 @@ def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dic
         # A utility split across features must union, or its area shrinks and
         # territoryInCityPct inflates past the merge gate.
         territories[utility] = unary_union([territories[utility], geometry]) if utility in territories else geometry
+    return territories
 
+
+def _cities(boundaries: Path, to_albers) -> tuple[dict[str, object], dict[str, str]]:
+    """Union multi-part city boundaries and keep each city's GEOID."""
     cities: dict[str, object] = {}
     geoids: dict[str, str] = {}
-    for feature in json.loads(boundaries.read_text())["features"]:
+    for feature in read_local_json(boundaries, "City boundary source")["features"]:
         properties = feature["properties"]
         city = properties.get("CDTFA_CITY")
         if not city:
@@ -169,6 +190,14 @@ def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dic
         geometry = to_albers(shape(feature["geometry"]))
         cities[city] = unary_union([cities[city], geometry]) if city in cities else geometry
         geoids.setdefault(city, properties.get("CENSUS_GEOID") or "")
+    return cities, geoids
+
+
+def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dict[str, object]]:
+    """Measure each utility territory against every city polygon in equal-area space."""
+    to_albers = _albers()
+    territories = _territories(lse_bytes, to_albers)
+    cities, geoids = _cities(boundaries, to_albers)
 
     rows = []
     for utility, territory in territories.items():
@@ -197,7 +226,7 @@ def overlaps(lse_bytes: bytes, boundaries: Path, minimum_pct: float) -> list[dic
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--boundaries", type=Path, default=Path("/tmp/ca-city-boundaries-wgs84.geojson"),
+    parser.add_argument("--boundaries", type=Path, default=DEFAULT_CACHE / "ca-city-boundaries-wgs84.geojson",
                         help="City boundary GeoJSON in WGS84 (same source family as build-boundaries.mjs)")
     parser.add_argument("--cache", type=Path, default=DEFAULT_CACHE, help="Directory for downloaded source releases")
     parser.add_argument("--min-pct", type=float, default=1.0, help="Drop pairs below this percentage in both directions")
@@ -206,7 +235,7 @@ def main() -> None:
     if not 0 < options.min_pct <= 100:
         raise SystemExit(f"--min-pct must be greater than 0 and at most 100, got {options.min_pct}")
     if not options.boundaries.is_file():
-        raise SystemExit(f"City boundary source not found: {options.boundaries}")
+        raise SystemExit(f"City boundary source not found: {options.boundaries}. Pass --boundaries with an explicit path.")
 
     eia = fetch(EIA_URL, options.cache / f"f861{EIA_YEAR}.zip")
     lse = fetch(LSE_URL, options.cache / "ca-lse-territories.geojson")

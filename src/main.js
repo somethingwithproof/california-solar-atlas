@@ -192,16 +192,18 @@ function municipalNote(city) {
   const basisNote = pou.method === 'reviewed-override'
     ? `Reviewed override: ${escapeHtml(pou.reason)}`
     : `${format.format(pou.territoryInCityPct)}% of this utility's service territory lies inside the city, so its reported capacity is treated as capacity in the city.`;
-  return `<div class="municipal-note"><strong>${escapeHtml(pou.utility)} is included.</strong> <span>${basisNote}${converted} Source: ${escapeHtml(pou.year)} Form EIA-861 net metering.${pou.sourceUrl ? ` <a href="${safeUrl(pou.sourceUrl)}" target="_blank" rel="noreferrer">Territory reference ↗</a>` : ''}</span></div>`;
+  const reference = pou.sourceUrl ? ` <a href="${safeUrl(pou.sourceUrl)}" target="_blank" rel="noreferrer">Territory reference ↗</a>` : '';
+  return `<div class="municipal-note"><strong>${escapeHtml(pou.utility)} is included.</strong> <span>${basisNote}${converted} Source: ${escapeHtml(pou.year)} Form EIA-861 net metering.${reference}</span></div>`;
 }
 
-function qualityBadge(city) {
+function qualityBadge(city, plain = false) {
   const status = coverageStatus(city);
-  return `<span class="status ${status}"><i></i>${term(coverageLabel(status), coverageTerm(status))}</span>`;
+  const label = plain ? escapeHtml(coverageLabel(status)) : term(coverageLabel(status), coverageTerm(status));
+  return `<span class="status ${status}"><i></i>${label}</span>`;
 }
 
-function geographyBadge(city) {
-  if (city.geographyRisk === 'likely-mailing-inflation') return `<span class="status partial"><i></i>${term('Geography risk', 'geographyRisk')}</span>`;
+function geographyBadge(city, plain = false) {
+  if (city.geographyRisk === 'likely-mailing-inflation') return `<span class="status partial"><i></i>${plain ? 'Geography risk' : term('Geography risk', 'geographyRisk')}</span>`;
   if (city.geographyRisk === 'unknown') return '<span class="status unverified"><i></i>Geography unknown</span>';
   return '';
 }
@@ -216,7 +218,8 @@ function sparkline(city) {
   const line = coords.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
   // Every chart carries its own gradient so two panels never share an id and the
   // downloaded SVG resolves its own fill.
-  const gradient = `sun-fill-${chartCount += 1}`;
+  chartCount += 1;
+  const gradient = `sun-fill-${chartCount}`;
   return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Approval-date proxy for cumulative capacity from 2001 to 2026"><defs><linearGradient id="${gradient}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaa72c" stop-opacity=".35"/><stop offset="1" stop-color="#eaa72c" stop-opacity="0"/></linearGradient></defs><path class="area" fill="url(#${gradient})" d="${line} L${coords.at(-1)[0]},${height} L${coords[0][0]},${height} Z"/><path class="line" d="${line}"/></svg><div class="chart-axis"><span>2001</span><span>${term('Approval-date proxy', 'approvalProxy')}</span><span>2026</span></div>`;
 }
 
@@ -268,8 +271,12 @@ function renderCounty(county, { historyMode = 'none' } = {}) {
   const select = document.querySelector('#county-select');
   if (select) select.value = county.slug;
   const members = state.data.cities.filter((city) => city.county === county.name).sort((a, b) => b.capacityMw - a.capacityMw);
-  const memberRows = members.length ? members.map((city) => `<button data-city-id="${escapeHtml(city.id)}"><span>${escapeHtml(city.name)}</span><strong>${format.format(city.capacityMw)} MW-DC</strong>${geographyBadge(city) || qualityBadge(city)}</button>`).join('') : '<p class="compare-empty">No incorporated cities in this county.</p>';
-  document.querySelector('#county-view').innerHTML = `<div class="county-title"><h3>${escapeHtml(county.name)} County</h3><button type="button" data-action="share-county">Share county</button></div><div class="metrics four county-metrics"><article><span>${term('IOU', 'iou')} reported capacity</span><strong>${format.format(county.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(county.projects)} project sites · incorporated and unincorporated</p></article><article><span>All-utility benchmark</span><strong>${format.format(county.allUtilityBenchmark.capacityMwAc)} <small>${term('MW-AC', 'mwac')}</small></strong><p>CEC 2024 · systems 1 MW and smaller · not additive</p></article><article><span>Broad generation estimate</span><strong>${format.format(county.generationGwh.low)}–${format.format(county.generationGwh.high)} <small>GWh/yr</small></strong><p>IOU inventory only; statewide yield envelope</p></article><article><span>Outside matched cities</span><strong>${format.format(county.outsideMatchedCitiesMw)} <small>MW-DC</small></strong><p>Unincorporated or unmatched service-city strings</p></article></div><div class="county-benchmark-note"><strong>Two different inventories.</strong> The ${format.format(county.capacityMw)} MW-DC value is the current PG&amp;E/SCE/SDG&amp;E project inventory. The <a href="${safeUrl(county.allUtilityBenchmark.sourceUrl)}" target="_blank" rel="noreferrer">CEC benchmark</a> is an older, AC-rated all-utility total. It improves coverage context but is never added to or substituted for the IOU total.${county.partialCities ? ` ${integer.format(county.partialCities)} incorporated ${county.partialCities === 1 ? 'city is' : 'cities are'} marked for partial utility coverage.` : ''}</div><div class="detail-grid county-detail"><article class="trend-panel"><div class="panel-head"><div><span>Dated IOU capacity</span><h3>County MW-DC by approval year</h3></div></div>${sparkline({ capacityMw: county.capacityMw, timeline: county.timeline })}${county.undatedProjects ? `<p>${integer.format(county.undatedProjects)} projects (${format.format(county.undatedCapacityMw)} MW-DC) have no parseable approval year.</p>` : ''}<p>${integer.format(county.storageProjects)} storage-linked project sites; aggregate energy capacity is withheld.</p></article><aside class="county-cities"><span>Incorporated-city subset</span><div>${memberRows}</div></aside></div>`;
+  const countyUndatedNote = county.undatedProjects ? `<p>${integer.format(county.undatedProjects)} projects (${format.format(county.undatedCapacityMw)} MW-DC) have no parseable approval year.</p>` : '';
+  const partialCityCount = county.partialCities;
+  const partialSubject = partialCityCount === 1 ? 'city is' : 'cities are';
+  const partialNote = partialCityCount ? ` ${integer.format(partialCityCount)} incorporated ${partialSubject} marked for partial utility coverage.` : '';
+  const memberRows = members.length ? members.map((city) => `<button data-city-id="${escapeHtml(city.id)}"><span>${escapeHtml(city.name)}</span><strong>${format.format(city.capacityMw)} MW-DC</strong>${geographyBadge(city, true) || qualityBadge(city, true)}</button>`).join('') : '<p class="compare-empty">No incorporated cities in this county.</p>';
+  document.querySelector('#county-view').innerHTML = `<div class="county-title"><h3>${escapeHtml(county.name)} County</h3><button type="button" data-action="share-county">Share county</button></div><div class="metrics four county-metrics"><article><span>${term('IOU', 'iou')} reported capacity</span><strong>${format.format(county.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(county.projects)} project sites · incorporated and unincorporated</p></article><article><span>All-utility benchmark</span><strong>${format.format(county.allUtilityBenchmark.capacityMwAc)} <small>${term('MW-AC', 'mwac')}</small></strong><p>CEC 2024 · systems 1 MW and smaller · not additive</p></article><article><span>Broad generation estimate</span><strong>${format.format(county.generationGwh.low)}–${format.format(county.generationGwh.high)} <small>GWh/yr</small></strong><p>IOU inventory only; statewide yield envelope</p></article><article><span>Outside matched cities</span><strong>${format.format(county.outsideMatchedCitiesMw)} <small>MW-DC</small></strong><p>Unincorporated or unmatched service-city strings</p></article></div><div class="county-benchmark-note"><strong>Two different inventories.</strong> The ${format.format(county.capacityMw)} MW-DC value is the current PG&amp;E/SCE/SDG&amp;E project inventory. The <a href="${safeUrl(county.allUtilityBenchmark.sourceUrl)}" target="_blank" rel="noreferrer">CEC benchmark</a> is an older, AC-rated all-utility total. It improves coverage context but is never added to or substituted for the IOU total.${partialNote}</div><div class="detail-grid county-detail"><article class="trend-panel"><div class="panel-head"><div><span>Dated IOU capacity</span><h3>County MW-DC by approval year</h3></div></div>${sparkline({ capacityMw: county.capacityMw, timeline: county.timeline })}${countyUndatedNote}<p>${integer.format(county.storageProjects)} storage-linked project sites; aggregate energy capacity is withheld.</p></article><aside class="county-cities"><span>Incorporated-city subset</span><div>${memberRows}</div></aside></div>`;
   if (historyMode !== 'none') history[`${historyMode}State`]({ county: county.slug }, '', countyUrl(county));
 }
 
@@ -302,7 +309,7 @@ function renderRankings() {
     return;
   }
   const max = config.value(ranked[0]) || 1;
-  const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${config.display(config.value(city))}</b></span>${qualityBadge(city)}</button>`).join('');
+  const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${config.display(config.value(city))}</b></span>${qualityBadge(city, true)}</button>`).join('');
   document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${rows}`;
 }
 

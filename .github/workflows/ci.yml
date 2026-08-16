@@ -25,7 +25,9 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run build
-      - run: npm audit --audit-level=high
+      # Fails on any advisory. The dev tree is the build-time supply chain for a
+      # static site, so a moderate finding there still warrants a look.
+      - run: npm audit
 
   validate-release-assets:
     permissions:

@@ -335,10 +335,15 @@ for (const entry of entries) {
 // Publicly owned utility capacity is kept in its own field rather than folded into
 // capacityMw. capacityMw stays the DG Stats IOU inventory, so every county and
 // statewide reconciliation keeps comparing like with like.
+// NUL cannot appear in a utility or city name, so it cannot forge a composite key.
+const STATE_SUFFIX = ' - (CA)';
+const trimStateSuffix = (name) => name.endsWith(STATE_SUFFIX) ? name.slice(0, -STATE_SUFFIX.length) : name;
+const overlapKey = (utility, city) => `${utility}\u0000${city}`;
+
 function pouByCity() {
   const capacity = new Map(pouInputs.netMetering.utilities.map((utility) => [utility.utility, utility]));
   const overlap = new Map();
-  for (const pair of pouInputs.territoryOverlap.pairs) overlap.set(`${pair.utility} ${pair.city}`, pair);
+  for (const pair of pouInputs.territoryOverlap.pairs) overlap.set(overlapKey(pair.utility, pair.city), pair);
   const { low: ilrLow, high: ilrHigh } = pouAttribution.inverterLoadingRatio;
   const merged = new Map();
   const excluded = [];
@@ -348,7 +353,7 @@ function pouByCity() {
     if (!reported) throw new Error(`${entry.eiaName}: no EIA-861 capacity row; refresh data/pou-inputs.json`);
     if (entry.decision === 'excluded') { excluded.push({ ...entry, capacityMw: reported.capacityMw }); continue; }
 
-    const pair = overlap.get(`${entry.territoryName} ${entry.city}`);
+    const pair = overlap.get(overlapKey(entry.territoryName, entry.city));
     if (!pair) throw new Error(`${entry.eiaName}: no measured overlap for ${entry.territoryName} against ${entry.city}`);
     if (entry.decision === 'rule' && pair.territoryInCityPct < pouAttribution.mergeThresholdPct) {
       throw new Error(`${entry.eiaName}: ${pair.territoryInCityPct}% is below the ${pouAttribution.mergeThresholdPct}% merge rule; use an override with a reason`);
@@ -360,7 +365,7 @@ function pouByCity() {
     const record = {
       // EIA suffixes its utility names for disambiguation; the exact string stays in
       // data/pou-attribution.json, so trimming it here costs no provenance.
-      utility: entry.eiaName.replace(/\s*-\s*\(CA\)$/, ''),
+      utility: trimStateSuffix(entry.eiaName),
       basis: reported.basis,
       reportedMw: reported.capacityMw,
       capacityRangeMwDc: {
@@ -382,6 +387,32 @@ function pouByCity() {
 }
 
 const { merged: pouMerged, excluded: pouExcluded } = pouByCity();
+// Municipal capacity only joins the capacity and generation totals. Project counts,
+// sectors, and the approval-date timeline stay IOU-only, because EIA-861 reports no
+// project records. EIA-861 also carries no vintages, so the capacity is treated like an
+// undated IOU project: fully degraded from 2001 at the low end, undegraded at the high.
+function applyPouCapacity(record, pou, { capacityMw, effectiveLowKw, effectiveHighKw, yieldRange }) {
+  const lowKw = pou.capacityRangeMwDc.low * 1000 * (0.995 ** Math.max(0, currentYear - 2001));
+  const highKw = pou.capacityRangeMwDc.high * 1000;
+  record.pouCapacity = pou;
+  record.coverage = {
+    status: 'partial',
+    note: `${pou.utility} capacity is included from ${pou.year} Form EIA-861 net metering. Project counts, sector splits, and the growth timeline below still come only from PG&E, SCE, and SDG&E records.`
+  };
+  record.totalCapacityRangeMwDc = {
+    low: Number((capacityMw + pou.capacityRangeMwDc.low).toFixed(3)),
+    high: Number((capacityMw + pou.capacityRangeMwDc.high).toFixed(3))
+  };
+  record.totalEffectiveCapacityRangeMw = {
+    low: Number(((effectiveLowKw + lowKw) / 1000).toFixed(3)),
+    high: Number(((effectiveHighKw + highKw) / 1000).toFixed(3))
+  };
+  record.totalGenerationRangeGwh = {
+    low: Number(((effectiveLowKw + lowKw) * yieldRange[0] / 1_000_000).toFixed(1)),
+    high: Number(((effectiveHighKw + highKw) * yieldRange[1] / 1_000_000).toFixed(1))
+  };
+}
+
 const municipalKeys = new Set(coverageRegistry.partialCities.map(key));
 const records = [...uniqueCities.values()].map((city) => {
   let cumulativeKw = 0;
@@ -450,32 +481,7 @@ const records = [...uniqueCities.values()].map((city) => {
   };
   if (loadRegistry[key(city.name)]) record.load = loadRegistry[key(city.name)];
   const pou = pouMerged.get(key(city.name));
-  if (pou) {
-    record.pouCapacity = pou;
-    // Only the capacity total gains the municipal utility. Project counts, sectors, and the
-    // approval-date timeline stay IOU-only, because EIA-861 reports no project records.
-    record.coverage = {
-      status: 'partial',
-      note: `${pou.utility} capacity is included from ${pou.year} Form EIA-861 net metering. Project counts, sector splits, and the growth timeline below still come only from PG&E, SCE, and SDG&E records.`
-    };
-    record.totalCapacityRangeMwDc = {
-      low: Number((capacityMw + pou.capacityRangeMwDc.low).toFixed(3)),
-      high: Number((capacityMw + pou.capacityRangeMwDc.high).toFixed(3))
-    };
-    // EIA-861 reports a cumulative total with no vintages, so municipal capacity gets the
-    // same treatment as undated IOU projects: fully degraded from 2001 at the low end,
-    // undegraded at the high end.
-    const pouLowKw = pou.capacityRangeMwDc.low * 1000 * (0.995 ** Math.max(0, currentYear - 2001));
-    const pouHighKw = pou.capacityRangeMwDc.high * 1000;
-    record.totalEffectiveCapacityRangeMw = {
-      low: Number(((effectiveLowKw + pouLowKw) / 1000).toFixed(3)),
-      high: Number(((effectiveHighKw + pouHighKw) / 1000).toFixed(3))
-    };
-    record.totalGenerationRangeGwh = {
-      low: Number(((effectiveLowKw + pouLowKw) * yieldRange[0] / 1_000_000).toFixed(1)),
-      high: Number(((effectiveHighKw + pouHighKw) * yieldRange[1] / 1_000_000).toFixed(1))
-    };
-  }
+  if (pou) applyPouCapacity(record, pou, { capacityMw, effectiveLowKw, effectiveHighKw, yieldRange });
   return record;
 }).sort((a, b) => a.name.localeCompare(b.name));
 
