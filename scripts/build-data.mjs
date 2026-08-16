@@ -326,6 +326,7 @@ const countyAggregates = new Map([...countyNames].map(([countyKey, name]) => [co
 const uniqueCities = new Map([...cities.values()].map((city) => [city.id, city]));
 const entries = await zipEntries();
 if (!dataThrough) dataThrough = inferDataThrough(entries);
+const UNRESOLVED_COUNTY_CEILING = 0.005;
 const dropped = { projects: 0, capacityKw: 0, serviceCities: new Set(), countyProjects: 0, countyCapacityKw: 0, serviceCounties: new Set() };
 for (const entry of entries) {
   process.stdout.write(`Aggregating ${entry}\n`);
@@ -418,6 +419,12 @@ function applyPouCapacity(record, pou, { capacityMw, effectiveLowKw, effectiveHi
   };
 }
 
+const countedCountyKw = [...countyAggregates.values()].reduce((sum, county) => sum + county.capacityKw, 0);
+const unresolvedShare = dropped.countyCapacityKw / (countedCountyKw + dropped.countyCapacityKw || 1);
+if (unresolvedShare > UNRESOLVED_COUNTY_CEILING) {
+  throw new Error(`Unresolved Service County rows carry ${(unresolvedShare * 100).toFixed(2)}% of capacity, above the ${(UNRESOLVED_COUNTY_CEILING * 100).toFixed(2)}% ceiling: ${[...dropped.serviceCounties].join(', ')}`);
+}
+
 const municipalKeys = new Set(coverageRegistry.partialCities.map(key));
 const records = [...uniqueCities.values()].map((city) => {
   let cumulativeKw = 0;
@@ -489,6 +496,13 @@ const records = [...uniqueCities.values()].map((city) => {
   if (pou) applyPouCapacity(record, pou, { capacityMw, effectiveLowKw, effectiveHighKw, yieldRange });
   return record;
 }).sort((a, b) => a.name.localeCompare(b.name));
+
+const appliedUtilities = new Set(records.filter((city) => city.pouCapacity).map((city) => city.pouCapacity.utility));
+if (appliedUtilities.size !== pouMerged.size) {
+  const applied = new Set([...pouMerged.values()].filter((pou) => appliedUtilities.has(pou.utility)).map((pou) => pou.utility));
+  const stranded = [...pouMerged.values()].map((pou) => pou.utility).filter((name) => !applied.has(name));
+  throw new Error(`Municipal capacity was never applied to a city record for: ${stranded.join(', ')}`);
+}
 
 const counties = [...countyAggregates.values()].sort((a, b) => a.name.localeCompare(b.name)).map((county) => {
   const name = county.name;

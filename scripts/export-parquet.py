@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import sys
 import json
 import math
 import shutil
@@ -325,7 +326,12 @@ def run(input_path: Path, output_path: Path, *, replace: bool = False) -> None:
         except BaseException:
             retired.replace(output_path)
             raise
-        shutil.rmtree(retired, ignore_errors=True)
+        # The swap already succeeded, so a cleanup failure must not fail the export,
+        # but it must not be silent either: the leftover needs removing by hand.
+        try:
+            shutil.rmtree(retired)
+        except OSError as error:
+            sys.stderr.write(f"Warning: could not remove the retired release {retired}: {error}\n")
 
 
 def main() -> None:

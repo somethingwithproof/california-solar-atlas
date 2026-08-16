@@ -6,3 +6,4 @@ dist-data/
 *.zip
 __pycache__/
 .pou-cache/
+dist-data.retired-*
