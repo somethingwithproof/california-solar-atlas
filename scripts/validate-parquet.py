@@ -18,7 +18,7 @@ import pyarrow.parquet as pq
 
 MAX_INPUT_BYTES = 25_000_000
 SCHEMA_FINGERPRINTS = {
-    "cities": "eeef828f843a8a8f5fd5a0c3ecaa549643891b0c053590d67578a2caba464d93",
+    "cities": "65dbc9f4b106080da5dd3ab60e2b45d3870b05cb255519496660b2d3d7766109",
     "counties": "092fb7de223913f9b3254e21f416c9a3aa65f0733bee7a50c957227912b51c5d",
     "city-timeline": "03e6cd91136514c8095f21aecde208cef7b4e25631d23ccd7a39b081288c5072",
     "county-timeline": "8963492a078505d552462ff66154c311459f5597810b62ea122fdfa037b9649e",

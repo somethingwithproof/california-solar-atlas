@@ -1,0 +1,57 @@
+{
+  "note": "Maps publicly owned utility net-metered capacity to incorporated cities. A utility merges only when its service territory lies inside the city, so all of its capacity does too. Covering a city is not sufficient: Imperial Irrigation District covers all of El Centro, but El Centro is 0.2% of IID.",
+  "mergeThresholdPct": 95,
+  "inverterLoadingRatio": {
+    "low": 1.08,
+    "high": 1.25,
+    "note": "Converts AC-reported capacity to DC. The band spans fleet vintage: 1.08 is the 2018 median for string-inverter systems and 1.25 the upper 2024 all-sector median. Cumulative POU fleets contain both.",
+    "sources": [
+      { "name": "Berkeley Lab, Tracking the Sun 2019, page 13", "url": "https://emp.lbl.gov/tracking-the-sun" },
+      { "name": "Berkeley Lab, Tracking the Sun 2024, page 25", "url": "https://emp.lbl.gov/tracking-the-sun" }
+    ]
+  },
+  "utilities": [
+    { "eiaName": "Los Angeles Department of Water & Power", "territoryName": "Los Angeles Department of Water & Power", "city": "Los Angeles", "decision": "override",
+      "reason": "Geometric test gives 20.7% because the territory polygon includes the Owens Valley aqueduct corridor, which has effectively no retail customers. LADWP is the City of Los Angeles municipal utility and covers 97.0% of the city.",
+      "sourceUrl": "https://www.ladwp.com/account/customer-service/service-area-map" },
+    { "eiaName": "City of Colton - (CA)", "territoryName": "Colton Electric Utility Department", "city": "Colton", "decision": "override",
+      "reason": "Territory is 88.1% inside the city, below the 95% rule. The remainder serves adjacent unincorporated land, so up to roughly 12% of this capacity may fall outside the city boundary.",
+      "sourceUrl": "https://www.coltonca.gov/government/departments/electric-utility" },
+
+    { "eiaName": "City of Riverside - (CA)", "territoryName": "City of Riverside", "city": "Riverside", "decision": "rule" },
+    { "eiaName": "City of Roseville - (CA)", "territoryName": "Roseville Electric", "city": "Roseville", "decision": "rule" },
+    { "eiaName": "City of Anaheim - (CA)", "territoryName": "City of Anaheim Public Utilities Department", "city": "Anaheim", "decision": "rule" },
+    { "eiaName": "City of Glendale - (CA)", "territoryName": "Glendale Water & Power", "city": "Glendale", "decision": "rule" },
+    { "eiaName": "City of Pasadena - (CA)", "territoryName": "Pasadena Water & Power", "city": "Pasadena", "decision": "rule" },
+    { "eiaName": "City of Santa Clara - (CA)", "territoryName": "Silicon Valley Power", "city": "Santa Clara", "decision": "rule" },
+    { "eiaName": "City of Redding - (CA)", "territoryName": "Redding Electric Utility", "city": "Redding", "decision": "rule" },
+    { "eiaName": "City of Palo Alto - (CA)", "territoryName": "City of Palo Alto", "city": "Palo Alto", "decision": "rule" },
+    { "eiaName": "City of Moreno Valley - (CA)", "territoryName": "Moreno Valley Utility", "city": "Moreno Valley", "decision": "rule" },
+    { "eiaName": "City of Burbank Water and Power", "territoryName": "Burbank Water & Power", "city": "Burbank", "decision": "rule" },
+    { "eiaName": "City of Vernon", "territoryName": "City of Vernon Municipal Light Department", "city": "Vernon", "decision": "rule" },
+    { "eiaName": "City of Lodi - (CA)", "territoryName": "Lodi Electric Utility", "city": "Lodi", "decision": "rule" },
+    { "eiaName": "Alameda Municipal Power", "territoryName": "Alameda Power & Telecom", "city": "Alameda", "decision": "rule" },
+    { "eiaName": "City of Azusa", "territoryName": "Azusa Light & Power", "city": "Azusa", "decision": "rule" },
+    { "eiaName": "City of Shasta Lake - (CA)", "territoryName": "City of Shasta Lake", "city": "Shasta Lake", "decision": "rule" },
+    { "eiaName": "City of Corona - (CA)", "territoryName": "City of Corona Department of Water & Power", "city": "Corona", "decision": "rule" },
+
+    { "eiaName": "Sacramento Municipal Util Dist", "territoryName": "Sacramento Municipal Utility District", "decision": "excluded",
+      "reason": "Serves most of Sacramento County; only 11.0% of the territory is inside the city of Sacramento." },
+    { "eiaName": "Imperial Irrigation District", "territoryName": "Imperial Irrigation District", "decision": "excluded",
+      "reason": "Multi-county district across Imperial, Riverside, and San Diego; 0.2% of the territory is inside its largest city." },
+    { "eiaName": "Modesto Irrigation District", "territoryName": "Modesto Irrigation District", "decision": "excluded",
+      "reason": "District spanning Stanislaus and San Joaquin; 4.6% of the territory is inside Modesto." },
+    { "eiaName": "Turlock Irrigation District", "territoryName": "Turlock Irrigation District", "decision": "excluded",
+      "reason": "District spanning Stanislaus, Merced, and Tuolumne; 2.5% of the territory is inside Turlock." },
+    { "eiaName": "Merced Irrigation District", "territoryName": "Merced Irrigation District", "decision": "excluded",
+      "reason": "District serving unincorporated Merced County; 8.1% of the territory is inside Merced." },
+    { "eiaName": "PacifiCorp", "territoryName": "PacifiCorp", "decision": "excluded",
+      "reason": "Investor-owned utility absent from DG Stats, serving four far-northern counties; no single-city attribution." },
+    { "eiaName": "Bear Valley Electric Service", "territoryName": "Bear Valley Electric Service", "decision": "excluded",
+      "reason": "Investor-owned utility absent from DG Stats; 7.2% of the territory is inside Big Bear Lake." },
+    { "eiaName": "Liberty Utilities", "territoryName": "Liberty Utilities", "decision": "excluded",
+      "reason": "Investor-owned utility absent from DG Stats, spanning seven Sierra counties." },
+    { "eiaName": "Surprise Valley Electrification", "territoryName": "Surprise Valley Electrification", "decision": "excluded",
+      "reason": "Rural cooperative spanning Lassen and Modoc; no incorporated-city attribution." }
+  ]
+}

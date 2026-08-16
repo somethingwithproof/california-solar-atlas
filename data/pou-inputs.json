@@ -1,0 +1,2401 @@
+{
+  "netMetering": {
+    "year": 2024,
+    "basisNote": "Capacity basis is per utility; the Type column reports AC or DC.",
+    "sourceName": "Form EIA-861 Net Metering",
+    "sourceUrl": "https://www.eia.gov/electricity/data/eia861/",
+    "utilities": [
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "basis": "AC",
+        "capacityMw": 678.34
+      },
+      {
+        "utility": "Sacramento Municipal Util Dist",
+        "basis": "AC",
+        "capacityMw": 387.956
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "basis": "AC",
+        "capacityMw": 140.704
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "basis": "AC",
+        "capacityMw": 87.27
+      },
+      {
+        "utility": "City of Riverside - (CA)",
+        "basis": "DC",
+        "capacityMw": 70.63
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "basis": "AC",
+        "capacityMw": 64.887
+      },
+      {
+        "utility": "City of Roseville - (CA)",
+        "basis": "AC",
+        "capacityMw": 55.289
+      },
+      {
+        "utility": "City of Anaheim - (CA)",
+        "basis": "DC",
+        "capacityMw": 52.0
+      },
+      {
+        "utility": "City of Glendale - (CA)",
+        "basis": "AC",
+        "capacityMw": 30.777
+      },
+      {
+        "utility": "City of Pasadena - (CA)",
+        "basis": "AC",
+        "capacityMw": 26.79
+      },
+      {
+        "utility": "City of Santa Clara - (CA)",
+        "basis": "AC",
+        "capacityMw": 24.342
+      },
+      {
+        "utility": "City of Redding - (CA)",
+        "basis": "DC",
+        "capacityMw": 23.603
+      },
+      {
+        "utility": "Merced Irrigation District",
+        "basis": "AC",
+        "capacityMw": 22.851
+      },
+      {
+        "utility": "City of Palo Alto - (CA)",
+        "basis": "AC",
+        "capacityMw": 20.9
+      },
+      {
+        "utility": "City of Colton - (CA)",
+        "basis": "AC",
+        "capacityMw": 20.53
+      },
+      {
+        "utility": "City of Moreno Valley - (CA)",
+        "basis": "AC",
+        "capacityMw": 18.49
+      },
+      {
+        "utility": "City of Burbank Water and Power",
+        "basis": "AC",
+        "capacityMw": 15.632
+      },
+      {
+        "utility": "PacifiCorp",
+        "basis": "DC",
+        "capacityMw": 14.763
+      },
+      {
+        "utility": "City of Vernon",
+        "basis": "AC",
+        "capacityMw": 7.84
+      },
+      {
+        "utility": "City of Lodi - (CA)",
+        "basis": "AC",
+        "capacityMw": 6.879
+      },
+      {
+        "utility": "Alameda Municipal Power",
+        "basis": "AC",
+        "capacityMw": 6.792
+      },
+      {
+        "utility": "Bear Valley Electric Service",
+        "basis": "DC",
+        "capacityMw": 6.164
+      },
+      {
+        "utility": "Liberty Utilities",
+        "basis": "AC",
+        "capacityMw": 4.753
+      },
+      {
+        "utility": "City of Azusa",
+        "basis": "DC",
+        "capacityMw": 3.18
+      },
+      {
+        "utility": "City of Shasta Lake - (CA)",
+        "basis": "AC",
+        "capacityMw": 0.82
+      },
+      {
+        "utility": "City of Corona - (CA)",
+        "basis": "AC",
+        "capacityMw": 0.549
+      },
+      {
+        "utility": "Surprise Valley Electrification",
+        "basis": "AC",
+        "capacityMw": 0.162
+      }
+    ]
+  },
+  "territoryOverlap": {
+    "crs": "EPSG:3310",
+    "method": "Equal-area intersection of utility service territory with incorporated city polygons.",
+    "boundaryNote": "CEC states these service territory boundaries are approximate.",
+    "sourceName": "CEC Electric Load Serving Entities (IOU & POU)",
+    "sourceUrl": "https://cecgis-caenergy.opendata.arcgis.com/datasets/CAEnergy::electric-load-serving-entities-iou-pou/about",
+    "pairs": [
+      {
+        "utility": "Alameda Power & Telecom",
+        "city": "Alameda",
+        "geoid": "0600562",
+        "cityCoveredPct": 46.1,
+        "territoryInCityPct": 99.4
+      },
+      {
+        "utility": "Azusa Light & Power",
+        "city": "Azusa",
+        "geoid": "0603386",
+        "cityCoveredPct": 99.6,
+        "territoryInCityPct": 95.9
+      },
+      {
+        "utility": "Bear Valley Electric Service",
+        "city": "Big Bear Lake",
+        "geoid": "0606434",
+        "cityCoveredPct": 95.6,
+        "territoryInCityPct": 7.2
+      },
+      {
+        "utility": "Biggs Municipal Utilities",
+        "city": "Biggs",
+        "geoid": "0606560",
+        "cityCoveredPct": 61.5,
+        "territoryInCityPct": 99.7
+      },
+      {
+        "utility": "Burbank Water & Power",
+        "city": "Burbank",
+        "geoid": "0608954",
+        "cityCoveredPct": 99.7,
+        "territoryInCityPct": 96.0
+      },
+      {
+        "utility": "Burbank Water & Power",
+        "city": "Los Angeles",
+        "geoid": "0644000",
+        "cityCoveredPct": 0.1,
+        "territoryInCityPct": 3.8
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "San Francisco",
+        "geoid": "0667000",
+        "cityCoveredPct": 20.2,
+        "territoryInCityPct": 19.6
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Hillsborough",
+        "geoid": "0633798",
+        "cityCoveredPct": 80.8,
+        "territoryInCityPct": 2.1
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Fremont",
+        "geoid": "0626000",
+        "cityCoveredPct": 4.3,
+        "territoryInCityPct": 1.6
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Millbrae",
+        "geoid": "0647486",
+        "cityCoveredPct": 62.2,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Burlingame",
+        "geoid": "0609066",
+        "cityCoveredPct": 30.9,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Pacifica",
+        "geoid": "0654806",
+        "cityCoveredPct": 4.8,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "San Bruno",
+        "geoid": "0665028",
+        "cityCoveredPct": 8.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "South San Francisco",
+        "geoid": "0673262",
+        "cityCoveredPct": 1.5,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Daly City",
+        "geoid": "0617918",
+        "cityCoveredPct": 1.9,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Menlo Park",
+        "geoid": "0646870",
+        "cityCoveredPct": 1.2,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "City and County of San Francisco - Hetch Hetchy Water and Power",
+        "city": "Colma",
+        "geoid": "0614736",
+        "cityCoveredPct": 1.4,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "City of Anaheim Public Utilities Department",
+        "city": "Anaheim",
+        "geoid": "0602000",
+        "cityCoveredPct": 98.7,
+        "territoryInCityPct": 95.1
+      },
+      {
+        "utility": "City of Anaheim Public Utilities Department",
+        "city": "Orange",
+        "geoid": "0653980",
+        "cityCoveredPct": 1.6,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "City of Anaheim Public Utilities Department",
+        "city": "Yorba Linda",
+        "geoid": "0686832",
+        "cityCoveredPct": 1.8,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "City of Banning Electric Department",
+        "city": "Banning",
+        "geoid": "0603820",
+        "cityCoveredPct": 99.5,
+        "territoryInCityPct": 99.1
+      },
+      {
+        "utility": "City of Cerritos",
+        "city": "Cerritos",
+        "geoid": "0612552",
+        "cityCoveredPct": 98.5,
+        "territoryInCityPct": 98.7
+      },
+      {
+        "utility": "City of Corona Department of Water & Power",
+        "city": "Corona",
+        "geoid": "0616350",
+        "cityCoveredPct": 3.4,
+        "territoryInCityPct": 100.0
+      },
+      {
+        "utility": "City of Healdsburg Electric Department",
+        "city": "Healdsburg",
+        "geoid": "0633056",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 97.6
+      },
+      {
+        "utility": "City of Industry",
+        "city": "Industry",
+        "geoid": "0636490",
+        "cityCoveredPct": 99.5,
+        "territoryInCityPct": 99.1
+      },
+      {
+        "utility": "City of Lompoc Electric Division",
+        "city": "Lompoc",
+        "geoid": "0642524",
+        "cityCoveredPct": 99.3,
+        "territoryInCityPct": 99.4
+      },
+      {
+        "utility": "City of Needles",
+        "city": "Needles",
+        "geoid": "0650734",
+        "cityCoveredPct": 99.8,
+        "territoryInCityPct": 3.7
+      },
+      {
+        "utility": "City of Palo Alto",
+        "city": "Palo Alto",
+        "geoid": "0655282",
+        "cityCoveredPct": 91.7,
+        "territoryInCityPct": 97.1
+      },
+      {
+        "utility": "City of Pittsburg",
+        "city": "Vallejo",
+        "geoid": "0681666",
+        "cityCoveredPct": 8.4,
+        "territoryInCityPct": 100.0
+      },
+      {
+        "utility": "City of Riverside",
+        "city": "Riverside",
+        "geoid": "0662000",
+        "cityCoveredPct": 99.5,
+        "territoryInCityPct": 98.6
+      },
+      {
+        "utility": "City of Riverside",
+        "city": "Norco",
+        "geoid": "0651560",
+        "cityCoveredPct": 1.5,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "City of Shasta Lake",
+        "city": "Shasta Lake",
+        "geoid": "0671225",
+        "cityCoveredPct": 99.3,
+        "territoryInCityPct": 99.0
+      },
+      {
+        "utility": "City of Ukiah Electric Utilities Division",
+        "city": "Ukiah",
+        "geoid": "0681134",
+        "cityCoveredPct": 70.5,
+        "territoryInCityPct": 99.7
+      },
+      {
+        "utility": "City of Vernon Municipal Light Department",
+        "city": "Vernon",
+        "geoid": "0682422",
+        "cityCoveredPct": 96.2,
+        "territoryInCityPct": 95.5
+      },
+      {
+        "utility": "City of Vernon Municipal Light Department",
+        "city": "Bell",
+        "geoid": "0604870",
+        "cityCoveredPct": 2.9,
+        "territoryInCityPct": 1.5
+      },
+      {
+        "utility": "City of Vernon Municipal Light Department",
+        "city": "Huntington Park",
+        "geoid": "0636056",
+        "cityCoveredPct": 2.1,
+        "territoryInCityPct": 1.2
+      },
+      {
+        "utility": "City of Vernon Municipal Light Department",
+        "city": "Maywood",
+        "geoid": "0646492",
+        "cityCoveredPct": 2.1,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Colton Electric Utility Department",
+        "city": "Colton",
+        "geoid": "0614890",
+        "cityCoveredPct": 97.6,
+        "territoryInCityPct": 88.1
+      },
+      {
+        "utility": "Colton Electric Utility Department",
+        "city": "Rialto",
+        "geoid": "0660466",
+        "cityCoveredPct": 0.9,
+        "territoryInCityPct": 1.2
+      },
+      {
+        "utility": "Colton Electric Utility Department",
+        "city": "San Bernardino",
+        "geoid": "0665000",
+        "cityCoveredPct": 0.3,
+        "territoryInCityPct": 1.1
+      },
+      {
+        "utility": "Colton Electric Utility Department",
+        "city": "Grand Terrace",
+        "geoid": "0630658",
+        "cityCoveredPct": 2.1,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Visalia",
+        "geoid": "0682954",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 6.4
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Tulare",
+        "geoid": "0680644",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 3.4
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Farmersville",
+        "geoid": "0623616",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Hanford",
+        "geoid": "0631960",
+        "cityCoveredPct": 9.5,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Exeter",
+        "geoid": "0623126",
+        "cityCoveredPct": 25.4,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Woodlake",
+        "geoid": "0686300",
+        "cityCoveredPct": 18.2,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Eastside Power Authority",
+        "city": "Corcoran",
+        "geoid": "0616224",
+        "cityCoveredPct": 1.9,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Glendale Water & Power",
+        "city": "Glendale",
+        "geoid": "0630000",
+        "cityCoveredPct": 99.5,
+        "territoryInCityPct": 99.3
+      },
+      {
+        "utility": "Gridley Electric Utility",
+        "city": "Gridley",
+        "geoid": "0631260",
+        "cityCoveredPct": 87.4,
+        "territoryInCityPct": 99.9
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Coachella",
+        "geoid": "0614260",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Indio",
+        "geoid": "0636448",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "La Quinta",
+        "geoid": "0640354",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "El Centro",
+        "geoid": "0621782",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Brawley",
+        "geoid": "0608058",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Calexico",
+        "geoid": "0609710",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Calipatria",
+        "geoid": "0609878",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Imperial",
+        "geoid": "0636280",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Holtville",
+        "geoid": "0634246",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Indian Wells",
+        "geoid": "0636434",
+        "cityCoveredPct": 17.5,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Palm Desert",
+        "geoid": "0655184",
+        "cityCoveredPct": 4.4,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Rancho Mirage",
+        "geoid": "0659500",
+        "cityCoveredPct": 2.8,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Imperial Irrigation District",
+        "city": "Westmorland",
+        "geoid": "0684606",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Lassen Municipal Utility District",
+        "city": "Susanville",
+        "geoid": "0677364",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Lathrop Irrigation District",
+        "city": "Lathrop",
+        "geoid": "0640704",
+        "cityCoveredPct": 31.7,
+        "territoryInCityPct": 100.0
+      },
+      {
+        "utility": "Liberty Utilities",
+        "city": "South Lake Tahoe",
+        "geoid": "0673108",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 1.2
+      },
+      {
+        "utility": "Liberty Utilities",
+        "city": "Truckee",
+        "geoid": "0680588",
+        "cityCoveredPct": 9.5,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Liberty Utilities",
+        "city": "Loyalton",
+        "geoid": "0644364",
+        "cityCoveredPct": 92.9,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Lodi Electric Utility",
+        "city": "Lodi",
+        "geoid": "0642202",
+        "cityCoveredPct": 87.6,
+        "territoryInCityPct": 99.4
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "Los Angeles",
+        "geoid": "0644000",
+        "cityCoveredPct": 97.0,
+        "territoryInCityPct": 20.7
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "Beverly Hills",
+        "geoid": "0606308",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "San Fernando",
+        "geoid": "0666140",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "West Hollywood",
+        "geoid": "0684410",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "Culver City",
+        "geoid": "0617568",
+        "cityCoveredPct": 1.8,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "Hidden Hills",
+        "geoid": "0633518",
+        "cityCoveredPct": 2.5,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Los Angeles Department of Water & Power",
+        "city": "Lomita",
+        "geoid": "0642468",
+        "cityCoveredPct": 2.7,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Merced Irrigation District",
+        "city": "Merced",
+        "geoid": "0646898",
+        "cityCoveredPct": 76.0,
+        "territoryInCityPct": 8.1
+      },
+      {
+        "utility": "Merced Irrigation District",
+        "city": "Atwater",
+        "geoid": "0603162",
+        "cityCoveredPct": 97.6,
+        "territoryInCityPct": 2.8
+      },
+      {
+        "utility": "Merced Irrigation District",
+        "city": "Livingston",
+        "geoid": "0642006",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 1.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Los Angeles",
+        "geoid": "0644000",
+        "cityCoveredPct": 99.8,
+        "territoryInCityPct": 9.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Diego",
+        "geoid": "0666000",
+        "cityCoveredPct": 96.0,
+        "territoryInCityPct": 6.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Riverside",
+        "geoid": "0662000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 1.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Irvine",
+        "geoid": "0636770",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 1.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Long Beach",
+        "geoid": "0643000",
+        "cityCoveredPct": 99.6,
+        "territoryInCityPct": 1.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Thousand Oaks",
+        "geoid": "0678582",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 1.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Anaheim",
+        "geoid": "0602000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Chula Vista",
+        "geoid": "0613392",
+        "cityCoveredPct": 95.7,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Moreno Valley",
+        "geoid": "0649270",
+        "cityCoveredPct": 99.8,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Ontario",
+        "geoid": "0653896",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Chino Hills",
+        "geoid": "0613214",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Jurupa Valley",
+        "geoid": "0637692",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lake Elsinore",
+        "geoid": "0639486",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Menifee",
+        "geoid": "0646842",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Oceanside",
+        "geoid": "0653322",
+        "cityCoveredPct": 99.6,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rancho Cucamonga",
+        "geoid": "0659451",
+        "cityCoveredPct": 91.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Simi Valley",
+        "geoid": "0672016",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Carlsbad",
+        "geoid": "0611194",
+        "cityCoveredPct": 97.1,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Corona",
+        "geoid": "0616350",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Escondido",
+        "geoid": "0622804",
+        "cityCoveredPct": 95.6,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Poway",
+        "geoid": "0658520",
+        "cityCoveredPct": 96.3,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Temecula",
+        "geoid": "0678120",
+        "cityCoveredPct": 99.8,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Fontana",
+        "geoid": "0624680",
+        "cityCoveredPct": 78.4,
+        "territoryInCityPct": 0.6
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Glendale",
+        "geoid": "0630000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.6
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Murrieta",
+        "geoid": "0650076",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.6
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Perris",
+        "geoid": "0656700",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.6
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Chino",
+        "geoid": "0613210",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Hemet",
+        "geoid": "0633182",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Huntington Beach",
+        "geoid": "0636000",
+        "cityCoveredPct": 98.5,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Orange",
+        "geoid": "0653980",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Oxnard",
+        "geoid": "0654652",
+        "cityCoveredPct": 47.8,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Jacinto",
+        "geoid": "0667112",
+        "cityCoveredPct": 99.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Santa Ana",
+        "geoid": "0669000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Encinitas",
+        "geoid": "0622678",
+        "cityCoveredPct": 99.6,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Fullerton",
+        "geoid": "0628000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Malibu",
+        "geoid": "0645246",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Newport Beach",
+        "geoid": "0651182",
+        "cityCoveredPct": 93.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Pasadena",
+        "geoid": "0656000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Pomona",
+        "geoid": "0658072",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Marcos",
+        "geoid": "0668196",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Torrance",
+        "geoid": "0680000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Wildomar",
+        "geoid": "0685446",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Yorba Linda",
+        "geoid": "0686832",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Burbank",
+        "geoid": "0608954",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Camarillo",
+        "geoid": "0610046",
+        "cityCoveredPct": 93.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Carson",
+        "geoid": "0611530",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Costa Mesa",
+        "geoid": "0616532",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Diamond Bar",
+        "geoid": "0619192",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "El Cajon",
+        "geoid": "0621712",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Garden Grove",
+        "geoid": "0629000",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Laguna Niguel",
+        "geoid": "0639248",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lake Forest",
+        "geoid": "0639496",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Mission Viejo",
+        "geoid": "0648256",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Norco",
+        "geoid": "0651560",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Clemente",
+        "geoid": "0665084",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Juan Capistrano",
+        "geoid": "0668028",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Santee",
+        "geoid": "0670224",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Upland",
+        "geoid": "0681344",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Vista",
+        "geoid": "0682996",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "West Covina",
+        "geoid": "0684200",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Whittier",
+        "geoid": "0685292",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Arcadia",
+        "geoid": "0602462",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Beaumont",
+        "geoid": "0604758",
+        "cityCoveredPct": 34.7,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Brea",
+        "geoid": "0608100",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Buena Park",
+        "geoid": "0608786",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Calabasas",
+        "geoid": "0609598",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Cerritos",
+        "geoid": "0612552",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Claremont",
+        "geoid": "0613756",
+        "cityCoveredPct": 94.1,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Compton",
+        "geoid": "0615044",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Downey",
+        "geoid": "0619766",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Eastvale",
+        "geoid": "0621230",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "El Monte",
+        "geoid": "0622230",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Fountain Valley",
+        "geoid": "0625380",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Glendora",
+        "geoid": "0630014",
+        "cityCoveredPct": 69.3,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Industry",
+        "geoid": "0636490",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Inglewood",
+        "geoid": "0636546",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Irwindale",
+        "geoid": "0636826",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Mesa",
+        "geoid": "0640004",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Laguna Beach",
+        "geoid": "0639178",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lakewood",
+        "geoid": "0639892",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Monrovia",
+        "geoid": "0648648",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Montebello",
+        "geoid": "0648816",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Moorpark",
+        "geoid": "0649138",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Norwalk",
+        "geoid": "0652526",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Pico Rivera",
+        "geoid": "0656924",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rancho Palos Verdes",
+        "geoid": "0659514",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rancho Santa Margarita",
+        "geoid": "0659587",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Dimas",
+        "geoid": "0666070",
+        "cityCoveredPct": 87.7,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Santa Fe Springs",
+        "geoid": "0669154",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Santa Monica",
+        "geoid": "0670000",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Seal Beach",
+        "geoid": "0670686",
+        "cityCoveredPct": 96.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Tustin",
+        "geoid": "0680854",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Walnut",
+        "geoid": "0683332",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Westminster",
+        "geoid": "0684550",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Agoura Hills",
+        "geoid": "0600394",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Alhambra",
+        "geoid": "0600884",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Aliso Viejo",
+        "geoid": "0600947",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Baldwin Park",
+        "geoid": "0603666",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Bellflower",
+        "geoid": "0604982",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Beverly Hills",
+        "geoid": "0606308",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Canyon Lake",
+        "geoid": "0610928",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Commerce",
+        "geoid": "0614974",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Covina",
+        "geoid": "0616742",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Culver City",
+        "geoid": "0617568",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Cypress",
+        "geoid": "0617750",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Dana Point",
+        "geoid": "0617946",
+        "cityCoveredPct": 98.5,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Duarte",
+        "geoid": "0619990",
+        "cityCoveredPct": 99.3,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "El Segundo",
+        "geoid": "0622412",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Gardena",
+        "geoid": "0628168",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Hawthorne",
+        "geoid": "0632548",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Huntington Park",
+        "geoid": "0636056",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Ca\u00f1ada Flintridge",
+        "geoid": "0639003",
+        "cityCoveredPct": 90.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Habra",
+        "geoid": "0639290",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Habra Heights",
+        "geoid": "0639304",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Mirada",
+        "geoid": "0640032",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Puente",
+        "geoid": "0640340",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Verne",
+        "geoid": "0640830",
+        "cityCoveredPct": 92.7,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Laguna Hills",
+        "geoid": "0639220",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Laguna Woods",
+        "geoid": "0639259",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lemon Grove",
+        "geoid": "0641124",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Los Alamitos",
+        "geoid": "0643224",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lynwood",
+        "geoid": "0644574",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Manhattan Beach",
+        "geoid": "0645400",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Montclair",
+        "geoid": "0648788",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Monterey Park",
+        "geoid": "0648914",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "National City",
+        "geoid": "0650398",
+        "cityCoveredPct": 81.2,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Palos Verdes Estates",
+        "geoid": "0655380",
+        "cityCoveredPct": 99.8,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Paramount",
+        "geoid": "0655618",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Placentia",
+        "geoid": "0657526",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Port Hueneme",
+        "geoid": "0658296",
+        "cityCoveredPct": 37.6,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Redondo Beach",
+        "geoid": "0660018",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rolling Hills",
+        "geoid": "0662602",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rolling Hills Estates",
+        "geoid": "0662644",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rosemead",
+        "geoid": "0662896",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Gabriel",
+        "geoid": "0667042",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Marino",
+        "geoid": "0668224",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Solana Beach",
+        "geoid": "0672506",
+        "cityCoveredPct": 99.7,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "South El Monte",
+        "geoid": "0672996",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "South Gate",
+        "geoid": "0673080",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "South Pasadena",
+        "geoid": "0673220",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Stanton",
+        "geoid": "0673962",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Temple City",
+        "geoid": "0678148",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Vernon",
+        "geoid": "0682422",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Westlake Village",
+        "geoid": "0684438",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Artesia",
+        "geoid": "0602896",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Azusa",
+        "geoid": "0603386",
+        "cityCoveredPct": 7.6,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Bell",
+        "geoid": "0604870",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Bell Gardens",
+        "geoid": "0604996",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Bradbury",
+        "geoid": "0607946",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Cudahy",
+        "geoid": "0617498",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Del Mar",
+        "geoid": "0618506",
+        "cityCoveredPct": 96.1,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Hawaiian Gardens",
+        "geoid": "0632506",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Hermosa Beach",
+        "geoid": "0633364",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Hidden Hills",
+        "geoid": "0633518",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "La Palma",
+        "geoid": "0640256",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lawndale",
+        "geoid": "0640886",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Lomita",
+        "geoid": "0642468",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Maywood",
+        "geoid": "0646492",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Rialto",
+        "geoid": "0660466",
+        "cityCoveredPct": 8.8,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "San Fernando",
+        "geoid": "0666140",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Signal Hill",
+        "geoid": "0671876",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "Villa Park",
+        "geoid": "0682744",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Metropolitan Water District of So. Cal",
+        "city": "West Hollywood",
+        "geoid": "0684410",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Modesto",
+        "geoid": "0648354",
+        "cityCoveredPct": 78.1,
+        "territoryInCityPct": 4.6
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Mountain House",
+        "geoid": null,
+        "cityCoveredPct": 99.0,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Oakdale",
+        "geoid": "0652694",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.8
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Ripon",
+        "geoid": "0661026",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.7
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Riverbank",
+        "geoid": "0661068",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.6
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Escalon",
+        "geoid": "0622790",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Waterford",
+        "geoid": "0683612",
+        "cityCoveredPct": 98.6,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Modesto Irrigation District",
+        "city": "Manteca",
+        "geoid": "0645484",
+        "cityCoveredPct": 3.9,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Moreno Valley Utility",
+        "city": "Moreno Valley",
+        "geoid": "0649270",
+        "cityCoveredPct": 60.7,
+        "territoryInCityPct": 99.8
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Yreka",
+        "geoid": "0686944",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Alturas",
+        "geoid": "0601444",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Crescent City",
+        "geoid": "0617022",
+        "cityCoveredPct": 83.1,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Dorris",
+        "geoid": "0619584",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Dunsmuir",
+        "geoid": "0620242",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Etna",
+        "geoid": "0622972",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Fort Jones",
+        "geoid": "0625128",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Montague",
+        "geoid": "0648690",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Mount Shasta",
+        "geoid": "0649852",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Tulelake",
+        "geoid": "0680686",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "PacifiCorp",
+        "city": "Weed",
+        "geoid": "0683850",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Pasadena Water & Power",
+        "city": "Pasadena",
+        "geoid": "0656000",
+        "cityCoveredPct": 99.1,
+        "territoryInCityPct": 99.2
+      },
+      {
+        "utility": "Port of Oakland",
+        "city": "Oakland",
+        "geoid": "0653000",
+        "cityCoveredPct": 6.6,
+        "territoryInCityPct": 98.8
+      },
+      {
+        "utility": "Port of Stockton",
+        "city": "Stockton",
+        "geoid": "0675000",
+        "cityCoveredPct": 2.6,
+        "territoryInCityPct": 99.9
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "San Jose",
+        "geoid": "0668000",
+        "cityCoveredPct": 99.1,
+        "territoryInCityPct": 3.7
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Santa Rosa",
+        "geoid": "0670098",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Palo Alto",
+        "geoid": "0655282",
+        "cityCoveredPct": 89.7,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Sunnyvale",
+        "geoid": "0677000",
+        "cityCoveredPct": 96.9,
+        "territoryInCityPct": 0.5
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Santa Clara",
+        "geoid": "0669084",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.4
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Gilroy",
+        "geoid": "0629504",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Milpitas",
+        "geoid": "0647766",
+        "cityCoveredPct": 99.3,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Morgan Hill",
+        "geoid": "0649278",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Petaluma",
+        "geoid": "0656784",
+        "cityCoveredPct": 99.1,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Saratoga",
+        "geoid": "0670280",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Cupertino",
+        "geoid": "0617610",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Los Altos Hills",
+        "geoid": "0643294",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Los Gatos",
+        "geoid": "0644112",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Mountain View",
+        "geoid": "0649670",
+        "cityCoveredPct": 99.2,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Tracy",
+        "geoid": "0680238",
+        "cityCoveredPct": 29.5,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Windsor",
+        "geoid": "0685922",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.2
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Avenal",
+        "geoid": "0603302",
+        "cityCoveredPct": 26.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Campbell",
+        "geoid": "0610345",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Cloverdale",
+        "geoid": "0614190",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Healdsburg",
+        "geoid": "0633056",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Los Altos",
+        "geoid": "0643280",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Mountain House",
+        "geoid": null,
+        "cityCoveredPct": 55.5,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Patterson",
+        "geoid": "0656112",
+        "cityCoveredPct": 33.3,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Rohnert Park",
+        "geoid": "0662546",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Sonoma",
+        "geoid": "0672646",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Williams",
+        "geoid": "0685586",
+        "cityCoveredPct": 98.2,
+        "territoryInCityPct": 0.1
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Arvin",
+        "geoid": "0602924",
+        "cityCoveredPct": 38.4,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Coalinga",
+        "geoid": "0614274",
+        "cityCoveredPct": 17.1,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Cotati",
+        "geoid": "0616560",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "East Palo Alto",
+        "geoid": "0620956",
+        "cityCoveredPct": 18.3,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Huron",
+        "geoid": "0636084",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Mendota",
+        "geoid": "0646828",
+        "cityCoveredPct": 22.6,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Monte Sereno",
+        "geoid": "0648956",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Portola Valley",
+        "geoid": "0658380",
+        "cityCoveredPct": 3.2,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "San Joaquin",
+        "geoid": "0667126",
+        "cityCoveredPct": 99.7,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Sebastopol",
+        "geoid": "0670770",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Power and Water Resource Pooling Authority",
+        "city": "Shafter",
+        "geoid": "0671106",
+        "cityCoveredPct": 2.0,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Rancho Cucamonga Municipal Utility",
+        "city": "Rancho Cucamonga",
+        "geoid": "0659451",
+        "cityCoveredPct": 2.1,
+        "territoryInCityPct": 100.0
+      },
+      {
+        "utility": "Redding Electric Utility",
+        "city": "Redding",
+        "geoid": "0659920",
+        "cityCoveredPct": 99.7,
+        "territoryInCityPct": 99.7
+      },
+      {
+        "utility": "Roseville Electric",
+        "city": "Roseville",
+        "geoid": "0662938",
+        "cityCoveredPct": 97.2,
+        "territoryInCityPct": 99.6
+      },
+      {
+        "utility": "Sacramento Municipal Utility District",
+        "city": "Sacramento",
+        "geoid": "0664000",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 11.0
+      },
+      {
+        "utility": "Sacramento Municipal Utility District",
+        "city": "Elk Grove",
+        "geoid": "0622020",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 4.7
+      },
+      {
+        "utility": "Sacramento Municipal Utility District",
+        "city": "Rancho Cordova",
+        "geoid": "0659444",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 3.8
+      },
+      {
+        "utility": "Sacramento Municipal Utility District",
+        "city": "Folsom",
+        "geoid": "0624638",
+        "cityCoveredPct": 99.8,
+        "territoryInCityPct": 3.3
+      },
+      {
+        "utility": "Sacramento Municipal Utility District",
+        "city": "Citrus Heights",
+        "geoid": "0613588",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 1.6
+      },
+      {
+        "utility": "Sacramento Municipal Utility District",
+        "city": "Galt",
+        "geoid": "0628112",
+        "cityCoveredPct": 99.7,
+        "territoryInCityPct": 0.9
+      },
+      {
+        "utility": "Silicon Valley Power",
+        "city": "Santa Clara",
+        "geoid": "0669084",
+        "cityCoveredPct": 99.2,
+        "territoryInCityPct": 97.4
+      },
+      {
+        "utility": "Silicon Valley Power",
+        "city": "San Jose",
+        "geoid": "0668000",
+        "cityCoveredPct": 0.2,
+        "territoryInCityPct": 1.9
+      },
+      {
+        "utility": "Truckee Donner Public Utilities District",
+        "city": "Truckee",
+        "geoid": "0680588",
+        "cityCoveredPct": 90.5,
+        "territoryInCityPct": 69.3
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "city": "Turlock",
+        "geoid": "0680812",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 2.5
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "city": "Modesto",
+        "geoid": "0648354",
+        "cityCoveredPct": 21.9,
+        "territoryInCityPct": 1.5
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "city": "Patterson",
+        "geoid": "0656112",
+        "cityCoveredPct": 99.9,
+        "territoryInCityPct": 1.5
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "city": "Ceres",
+        "geoid": "0612524",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 1.4
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "city": "Hughson",
+        "geoid": "0634904",
+        "cityCoveredPct": 100.0,
+        "territoryInCityPct": 0.3
+      },
+      {
+        "utility": "Turlock Irrigation District",
+        "city": "Waterford",
+        "geoid": "0683612",
+        "cityCoveredPct": 1.4,
+        "territoryInCityPct": 0.0
+      },
+      {
+        "utility": "Victorville Municipal Utilities Services",
+        "city": "Victorville",
+        "geoid": "0682590",
+        "cityCoveredPct": 5.9,
+        "territoryInCityPct": 100.0
+      }
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+# Manual regeneration of data/pou-inputs.json. Not installed by CI; the output is checked in.
+openpyxl
+pandas
+pyproj
+shapely

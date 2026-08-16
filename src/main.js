@@ -1,4 +1,7 @@
 import './styles.css';
+// Editorial reference list, not pipeline provenance. Bundled rather than published in
+// cities.json so the release payload keeps describing only what produced its figures.
+import referenceSources from '../data/reference-sources.json';
 
 const DATA_URL = `${import.meta.env.BASE_URL}data/cities.json`;
 const BOUNDARIES_URL = `${import.meta.env.BASE_URL}data/boundaries.json`;
@@ -16,6 +19,8 @@ const uniqueCities = (cities) => [...new Map(cities.filter(Boolean).map((city) =
 const generationMid = (city) => (city.generationGwh.low + city.generationGwh.high) / 2;
 const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ? generationMid(city) / (deliveries + generationMid(city)) * 100 : null;
 const coverageStatus = (city) => ['reported', 'partial', 'unverified'].includes(city.coverage?.status) ? city.coverage.status : 'unverified';
+const zoneLabel = (city) => city.climateZone == null ? 'unassigned' : escapeHtml(city.climateZone);
+const yieldValue = (city, index) => escapeHtml(city.yieldRange?.[index] ?? '');
 const coverageLabel = (status) => ({ reported: 'IOU records found', partial: 'Partial utility coverage', unverified: 'Coverage unverified' })[status] || 'Coverage unknown';
 const metricConfig = {
   capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: (city) => city.capacityMw, display: (value) => `${format.format(value)} MW` },
@@ -74,11 +79,15 @@ function shell(meta) {
         </div>
         <p class="formula"><span>Solar share</span> = degradation-adjusted gross generation ÷ (grid deliveries + degradation-adjusted gross generation)</p>
       </section>
-      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${meta.sources.map((source) => `<a href="${safeUrl(source.url)}" target="_blank" rel="noreferrer"><span>${escapeHtml(source.role)}</span><strong>${escapeHtml(source.name)}</strong><b>↗</b></a>`).join('')}</div></section>
+      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${sourceLinks(meta.sources)}<div class="sources-reference"><h3>Coverage this build does not include</h3><p>Nothing above or below this line is mixed together. These are published so the gaps are checkable; no figure on this page is derived from them.</p></div>${sourceLinks(referenceSources.sources)}</div></section>
     </main>
     <footer><div><strong>California Solar Atlas</strong><span>Open data · Open methodology · MIT licensed</span></div><div class="footer-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer">GitHub <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/releases" target="_blank" rel="noreferrer">Data releases <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer">Report an issue <b aria-hidden="true">↗</b></a><button type="button" data-action="limits">Data limitations</button></div></footer>
     ${limitsDialog(meta)}
     <div id="toast" class="toast" role="status" aria-live="polite"></div>`;
+}
+
+function sourceLinks(sources) {
+  return sources.map((source) => `<a href="${safeUrl(source.url)}" target="_blank" rel="noreferrer"><span>${escapeHtml(source.role)}</span><strong>${escapeHtml(source.name)}</strong><b>↗</b></a>`).join('');
 }
 
 function metricOptions(selected) {
@@ -130,6 +139,35 @@ function setupSearch(root, mode) {
   });
 }
 
+function generationHeadline(city) {
+  const range = city.totalGenerationRangeGwh || city.generationGwh;
+  const note = city.pouCapacity
+    ? `${yieldValue(city, 0)}\u2013${yieldValue(city, 1)} kWh/kW \u00b7 municipal capacity has no vintage, so it is treated as undated`
+    : `${yieldValue(city, 0)}\u2013${yieldValue(city, 1)} kWh/kW \u00b7 degradation applied`;
+  return `<strong>${format.format(range.low)}\u2013${format.format(range.high)} <small>GWh/yr</small></strong><p>${note}</p>`;
+}
+
+function capacityHeadline(city) {
+  const pou = city.pouCapacity;
+  if (!pou) return `<strong>${format.format(city.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(city.projects)} current project sites</p>`;
+  const range = city.totalCapacityRangeMwDc;
+  // A DC-reported municipal figure needs no conversion, so it prints as one number.
+  const value = range.low === range.high ? format.format(range.low) : `${format.format(range.low)}–${format.format(range.high)}`;
+  return `<strong>${value} <small>MW-DC</small></strong><p>${format.format(city.capacityMw)} MW from IOU records plus ${format.format(pou.reportedMw)} MW-${escapeHtml(pou.basis)} from ${escapeHtml(pou.utility)}</p>`;
+}
+
+function municipalNote(city) {
+  const pou = city.pouCapacity;
+  if (!pou) return '';
+  const converted = pou.basis === 'AC'
+    ? ` Its capacity is reported in AC and converted to DC across an inverter-loading-ratio band, which is why the total is a range.`
+    : ` Its capacity is already reported in DC, so no conversion is applied.`;
+  const basisNote = pou.method === 'reviewed-override'
+    ? `Reviewed override: ${escapeHtml(pou.reason)}`
+    : `${format.format(pou.territoryInCityPct)}% of this utility's service territory lies inside the city, so its reported capacity is treated as capacity in the city.`;
+  return `<div class="municipal-note"><strong>${escapeHtml(pou.utility)} is included.</strong> <span>${basisNote}${converted} Source: ${escapeHtml(pou.year)} Form EIA-861 net metering.${pou.sourceUrl ? ` <a href="${safeUrl(pou.sourceUrl)}" target="_blank" rel="noreferrer">Territory reference ↗</a>` : ''}</span></div>`;
+}
+
 function qualityBadge(city) {
   const status = coverageStatus(city);
   return `<span class="status ${status}"><i></i>${coverageLabel(status)}</span>`;
@@ -141,13 +179,18 @@ function geographyBadge(city) {
   return '';
 }
 
+let chartCount = 0;
+
 function sparkline(city) {
   const points = city.timeline;
   const width = 720, height = 180, pad = 8;
   const max = Math.max(city.capacityMw, 1);
   const coords = points.map((point, index) => [pad + index / (points.length - 1) * (width - pad * 2), height - pad - point.mw / max * (height - pad * 2)]);
   const line = coords.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Approval-date proxy for cumulative capacity from 2001 to 2026"><defs><linearGradient id="sun-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaa72c" stop-opacity=".35"/><stop offset="1" stop-color="#eaa72c" stop-opacity="0"/></linearGradient></defs><path class="area" d="${line} L${coords.at(-1)[0]},${height} L${coords[0][0]},${height} Z"/><path class="line" d="${line}"/></svg><div class="chart-axis"><span>2001</span><span>Approval-date proxy</span><span>2026</span></div>`;
+  // Every chart carries its own gradient so two panels never share an id and the
+  // downloaded SVG resolves its own fill.
+  const gradient = `sun-fill-${chartCount += 1}`;
+  return `<svg class="chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Approval-date proxy for cumulative capacity from 2001 to 2026"><defs><linearGradient id="${gradient}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#eaa72c" stop-opacity=".35"/><stop offset="1" stop-color="#eaa72c" stop-opacity="0"/></linearGradient></defs><path class="area" fill="url(#${gradient})" d="${line} L${coords.at(-1)[0]},${height} L${coords[0][0]},${height} Z"/><path class="line" d="${line}"/></svg><div class="chart-axis"><span>2001</span><span>Approval-date proxy</span><span>2026</span></div>`;
 }
 
 function sectorRows(city) {
@@ -166,7 +209,7 @@ function storageSiteSummary(city) {
 }
 
 function cityCsv(city) {
-  const rows = [['field', 'value'], ['city', city.name], ['county', city.county], ['capacity_basis', 'System Size DC'], ['reported_capacity_mw_dc', city.capacityMw], ['effective_capacity_low_mw_dc', city.effectiveCapacityRangeMw.low], ['effective_capacity_high_mw_dc', city.effectiveCapacityRangeMw.high], ['undated_capacity_mw_dc', city.undatedCapacityMw], ['generation_low_gwh', city.generationGwh.low], ['generation_high_gwh', city.generationGwh.high], ['climate_zone', city.climateZone], ['climate_zone_method', city.climateZoneMethod], ['yield_low_kwh_per_kw', city.yieldRange[0]], ['yield_high_kwh_per_kw', city.yieldRange[1]], ['population_descriptive_only', city.population || ''], ['housing_units', city.housingUnits || ''], ['residential_sites_per_housing_units_pct', city.residentialSiteHousingPct ?? ''], ['geography_risk', city.geographyRisk], ['projects', city.projects], ['storage_linked_projects', city.storageProjects], ['storage_capacity', 'withheld: source units inconsistent'], ['coverage', city.coverage.status]];
+  const rows = [['field', 'value'], ['city', city.name], ['county', city.county], ['capacity_basis', 'System Size DC'], ['reported_capacity_mw_dc', city.capacityMw], ['effective_capacity_low_mw_dc', city.effectiveCapacityRangeMw.low], ['effective_capacity_high_mw_dc', city.effectiveCapacityRangeMw.high], ['undated_capacity_mw_dc', city.undatedCapacityMw], ['generation_low_gwh', city.generationGwh.low], ['generation_high_gwh', city.generationGwh.high], ['climate_zone', city.climateZone], ['climate_zone_method', city.climateZoneMethod], ['yield_low_kwh_per_kw', city.yieldRange[0]], ['yield_high_kwh_per_kw', city.yieldRange[1]], ['population_descriptive_only', city.population || ''], ['housing_units', city.housingUnits || ''], ['residential_sites_per_housing_units_pct', city.residentialSiteHousingPct ?? ''], ['geography_risk', city.geographyRisk], ['projects', city.projects], ['storage_linked_projects', city.storageProjects], ['storage_capacity', 'withheld: source units inconsistent'], ['coverage', city.coverage.status], ['municipal_utility', city.pouCapacity?.utility || ''], ['municipal_reported_capacity', city.pouCapacity ? `${city.pouCapacity.reportedMw} MW-${city.pouCapacity.basis}` : ''], ['municipal_attribution_method', city.pouCapacity?.method || ''], ['total_capacity_low_mw_dc', city.totalCapacityRangeMwDc?.low ?? city.capacityMw], ['total_capacity_high_mw_dc', city.totalCapacityRangeMwDc?.high ?? city.capacityMw]];
   return rows.map((row) => row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(',')).join('\n');
 }
 
@@ -177,10 +220,11 @@ function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
   const shareLow = city.load ? city.generationGwh.low / (city.load.highDeliveriesGwh + city.generationGwh.low) * 100 : null;
   const shareHigh = city.load ? city.generationGwh.high / (city.load.lowDeliveriesGwh + city.generationGwh.high) * 100 : null;
   const view = document.querySelector('#city-view');
-  view.innerHTML = `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · CEC climate zone ${city.climateZone || 'unassigned'}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}${geographyBadge(city)}<button data-action="share">Share</button><button data-action="csv">Download CSV</button></div></div>
+  view.innerHTML = `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · CEC climate zone ${zoneLabel(city)}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}${geographyBadge(city)}<button data-action="share">Share</button><button data-action="csv">Download CSV</button></div></div>
     <div class="coverage-note ${status}"><strong>${status === 'partial' ? 'Treat this capacity as a lower bound.' : 'Coverage note'}</strong><span>${escapeHtml(city.coverage.note)}</span><button data-action="limits" aria-label="Read all data limitations">?</button></div>
-    <div class="metrics four"><article><span>Reported capacity</span><strong>${format.format(city.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(city.projects)} current project sites</p></article><article><span>Climate-adjusted generation</span><strong>${format.format(city.generationGwh.low)}–${format.format(city.generationGwh.high)} <small>GWh/yr</small></strong><p>${city.yieldRange.join('–')} kWh/kW · degradation applied</p></article><article><span>Average reported system</span><strong>${format.format(city.averageSystemKw)} <small>kW-DC</small></strong><p>Service-city aggregate; not a household adoption rate</p></article><article><span>Share of city electricity use</span>${share == null ? '<strong class="not-available">Not available</strong><p>No verified city load denominator</p>' : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
-    <div class="detail-grid"><article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative dated MW-DC by approval date</h3></div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}${city.undatedProjects ? `<p>${integer.format(city.undatedProjects)} projects (${format.format(city.undatedCapacityMw)} MW-DC) lack a parseable approval year and are excluded from this chart and growth rate.</p>` : ''}</article><aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${city.generationGwh.low}</b><b>${city.generationGwh.high} GWh</b></div><p>Zone ${city.climateZone} uses ${city.yieldRange[0]}–${city.yieldRange[1]} kWh/kW-DC-year. Effective capacity spans ${format.format(city.effectiveCapacityRangeMw.low)}–${format.format(city.effectiveCapacityRangeMw.high)} MW after degradation${city.undatedProjects ? ' and unknown-date sensitivity' : ''}. Zone assignment: ${escapeHtml(city.climateZoneMethod.replaceAll('-', ' '))}.</p></aside></div>
+    ${municipalNote(city)}
+    <div class="metrics four"><article><span>Reported capacity</span>${capacityHeadline(city)}</article><article><span>Climate-adjusted generation</span>${generationHeadline(city)}</article><article><span>Average reported system</span><strong>${format.format(city.averageSystemKw)} <small>kW-DC</small></strong><p>Service-city aggregate; not a household adoption rate</p></article><article><span>Share of city electricity use</span>${share == null ? '<strong class="not-available">Not available</strong><p>No verified city load denominator</p>' : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
+    <div class="detail-grid"><article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative dated MW-DC by approval date</h3></div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}${city.undatedProjects ? `<p>${integer.format(city.undatedProjects)} projects (${format.format(city.undatedCapacityMw)} MW-DC) lack a parseable approval year and are excluded from this chart and growth rate.</p>` : ''}</article><aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${format.format((city.totalGenerationRangeGwh || city.generationGwh).low)}</b><b>${format.format((city.totalGenerationRangeGwh || city.generationGwh).high)} GWh</b></div><p>Zone ${zoneLabel(city)} uses ${yieldValue(city, 0)}–${yieldValue(city, 1)} kWh/kW-DC-year. Effective capacity spans ${format.format((city.totalEffectiveCapacityRangeMw || city.effectiveCapacityRangeMw).low)}–${format.format((city.totalEffectiveCapacityRangeMw || city.effectiveCapacityRangeMw).high)} MW after degradation${city.undatedProjects ? ' and unknown-date sensitivity' : ''}. Zone assignment: ${escapeHtml(city.climateZoneMethod.replaceAll('-', ' '))}.</p></aside></div>
     <div class="attributes"><article><div class="panel-head"><div><span>Customer mix</span><h3>Capacity by sector</h3></div></div>${sectorRows(city)}</article><article><div class="panel-head"><div><span>System profile</span><h3>What is connected</h3></div></div><dl><div><dt>Average system</dt><dd>${format.format(city.averageSystemKw)} kW-DC</dd></div><div><dt>Storage-linked sites</dt><dd>${storageSiteSummary(city)}</dd></div><div><dt>Storage energy</dt><dd>Withheld · source units inconsistent</dd></div><div><dt>Housing diagnostic</dt><dd>${city.residentialSiteHousingPct == null ? 'Unavailable' : `${format.format(city.residentialSiteHousingPct)}% residential sites / housing units`}</dd></div><div><dt>Source utilities</dt><dd>${city.utilities.length ? city.utilities.map(escapeHtml).join(', ') : 'None matched'}</dd></div></dl></article></div>
     <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>Positive System Size DC values only; PTC and CEC-AC values are not substituted or mixed into totals.</p><span>History quality</span><p>Application-approval-date proxy; PTO generally occurs later. Missing dates are kept out of the timeline and widen the generation range.</p>${loadSource(city)}</div>`;
   document.querySelector('#city-search').value = city.name;
@@ -252,7 +296,7 @@ function renderCompare() {
     return `<div class="compare-metric"><span>${label}</span><strong>${display}</strong><progress max="100" value="${(value || 0) / max * 100}" aria-label="Relative ${escapeHtml(label)}"></progress></div>`;
   };
   const chips = state.compare.map((city) => `<button data-remove="${escapeHtml(city.id)}">${escapeHtml(city.name)} <span aria-hidden="true">×</span><span class="sr-only">Remove</span></button>`).join('');
-  const cards = state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${escapeHtml(city.id)}" aria-label="Remove ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${city.climateZone}</p>${metrics.map((metric) => metricRow(city, metric)).join('')}<button class="text-button" data-city-id="${escapeHtml(city.id)}">View city →</button></article>`).join('');
+  const cards = state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${escapeHtml(city.id)}" aria-label="Remove ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${zoneLabel(city)}</p>${metrics.map((metric) => metricRow(city, metric)).join('')}<button class="text-button" data-city-id="${escapeHtml(city.id)}">View city →</button></article>`).join('');
   document.querySelector('#compare-view').innerHTML = `<div class="compare-chips">${chips}</div><div class="compare-grid">${cards}</div>`;
 }
 
@@ -317,9 +361,10 @@ async function start() {
     const requested = initialUrl.searchParams.get('city');
     const requestedCounty = initialUrl.searchParams.get('county');
     const city = state.data.cities.find((item) => slugify(item.name) === requested) || state.data.cities.find((item) => item.name === 'Chula Vista');
-    shell(state.data.meta);
-    selectCity(city, { scroll: false, historyMode: requestedCounty ? 'none' : 'replace' });
     const county = state.data.counties.find((item) => item.slug === requestedCounty);
+    shell(state.data.meta);
+    // Only a county that actually resolved should keep the city out of the URL.
+    selectCity(city, { scroll: false, historyMode: county ? 'none' : 'replace' });
     if (county) renderCounty(county, { historyMode: 'replace' });
     state.compare = uniqueCities([city, state.data.cities.find((item) => item.name === 'Pleasanton')]);
     bindEvents(); renderMap(); renderRankings(); renderCompare();

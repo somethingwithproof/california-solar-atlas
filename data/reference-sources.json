@@ -1,0 +1,40 @@
+{
+  "note": "Reference sources for coverage the current build does not include. These are not pipeline inputs and no published figure is derived from them. Audited in docs/power-mix-and-pou-sources.md.",
+  "sources": [
+    {
+      "name": "Form EIA-861 Net Metering",
+      "role": "Net-metered capacity for municipal utilities",
+      "url": "https://www.eia.gov/electricity/data/eia861/"
+    },
+    {
+      "name": "CEC Power Content Label",
+      "role": "Annual power mix by retail supplier",
+      "url": "https://www.energy.ca.gov/programs-and-topics/programs/power-source-disclosure-program/power-content-label"
+    },
+    {
+      "name": "CEC Total System Electric Generation",
+      "role": "Statewide generation by fuel type",
+      "url": "https://www.energy.ca.gov/data-reports/energy-almanac/california-electricity-data/2024-total-system-electric-generation"
+    },
+    {
+      "name": "CEC QFER CEC-1304",
+      "role": "Plant-level generation reporting",
+      "url": "https://www.energy.ca.gov/data-reports/energy-almanac/california-electricity-data/quarterly-fuel-and-energy-report-qfer-data"
+    },
+    {
+      "name": "CEC RPS publicly owned utility verification",
+      "role": "Renewable share by municipal utility",
+      "url": "https://www.energy.ca.gov/programs-and-topics/programs/renewables-portfolio-standard/renewables-portfolio-standard/renewables"
+    },
+    {
+      "name": "Berkeley Lab Tracking the Sun",
+      "role": "Project-level distributed solar characteristics",
+      "url": "https://emp.lbl.gov/tracking-the-sun"
+    },
+    {
+      "name": "CAISO supply",
+      "role": "Real-time mix for the CAISO area only",
+      "url": "https://www.caiso.com/todays-outlook/supply"
+    }
+  ]
+}
