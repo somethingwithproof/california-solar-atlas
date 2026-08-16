@@ -8,6 +8,8 @@ const input = resolve(process.env.CA_CITY_GEOJSON || '/tmp/ca-city-boundaries.ge
 const output = resolve(projectRoot, 'public/data/boundaries.json');
 const source = JSON.parse(readFileSync(input, 'utf8'));
 const sourceCrs = source.crs?.properties?.name || 'EPSG:4326';
+if (!Array.isArray(source.features) || !source.features.length) throw new Error('Boundary source has no features');
+if (!sourceCrs.includes('3310') && !sourceCrs.includes('4326')) throw new Error(`Unsupported boundary CRS: ${sourceCrs}`);
 proj4.defs('EPSG:3310', '+proj=aea +lat_0=0 +lon_0=-120 +lat_1=34 +lat_2=40.5 +x_0=0 +y_0=-4000000 +datum=NAD83 +units=m +no_defs');
 
 function distanceToSegment(point, start, end) {
@@ -48,7 +50,9 @@ function simplifyRing(ring) {
 }
 
 function project(coordinate) {
+  if (!Array.isArray(coordinate) || coordinate.length < 2 || !coordinate.every(Number.isFinite)) throw new Error('Boundary source contains an invalid coordinate');
   const [longitude, latitude] = sourceCrs.includes('3310') ? proj4('EPSG:3310', 'EPSG:4326', coordinate) : coordinate;
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude) || longitude < -125 || longitude > -113 || latitude < 32 || latitude > 43) throw new Error('Boundary coordinate falls outside California');
   return [(longitude + 125) / 11 * 520, (42.2 - latitude) / 10.2 * 650];
 }
 function ringPath(ring) {
@@ -59,10 +63,12 @@ function ringPath(ring) {
 
 const grouped = new Map();
 for (const feature of source.features) {
-  const geoid = feature.properties.CENSUS_GEOID;
+  const geoid = feature.properties?.CENSUS_GEOID;
   if (!geoid) continue;
+  if (!feature.geometry || !['Polygon', 'MultiPolygon'].includes(feature.geometry.type)) throw new Error(`${geoid}: unsupported boundary geometry`);
   const polygons = feature.geometry.type === 'Polygon' ? [feature.geometry.coordinates] : feature.geometry.coordinates;
   const path = polygons.flatMap((polygon) => polygon.map(ringPath)).join('');
+  if (path && !/^[MLZ0-9 .-]+$/.test(path)) throw new Error(`${geoid}: unsafe SVG path output`);
   if (path) grouped.set(geoid, `${grouped.get(geoid) || ''}${path}`);
 }
 

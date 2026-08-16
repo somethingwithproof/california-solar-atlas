@@ -34,8 +34,15 @@ function parseCsv(line) {
     } else if (character === ',' && !quoted) { values.push(value); value = ''; }
     else value += character;
   }
+  if (quoted) throw new Error('CSV row contains an unterminated quoted field; embedded newlines are not supported');
   values.push(value);
   return values;
+}
+
+function requireHeaders(header, names, sourceName) {
+  const missing = names.filter((name) => !header.includes(name));
+  if (missing.length) throw new Error(`${sourceName}: missing required columns: ${missing.join(', ')}`);
+  return Object.fromEntries(names.map((name) => [name, header.indexOf(name)]));
 }
 
 function key(value = '') {
@@ -45,7 +52,7 @@ function key(value = '') {
 function officialCities() {
   const lines = readFileSync(sources.cities, 'utf8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
   const header = parseCsv(lines.shift());
-  const indexes = Object.fromEntries(['CDTFA_CITY', 'CDTFA_COUNTY', 'CENSUS_GEOID'].map((name) => [name, header.indexOf(name)]));
+  const indexes = requireHeaders(header, ['CDTFA_CITY', 'CDTFA_COUNTY', 'CENSUS_GEOID'], 'California city identifiers');
   const cities = new Map();
   for (const line of lines) {
     const row = parseCsv(line);
@@ -59,7 +66,6 @@ function officialCities() {
       capacityKw: 0,
       projects: 0,
       storageProjects: 0,
-      storageKwh: 0,
       utilities: new Set(),
       byYear: new Map(),
       sectors: { residential: { kw: 0, projects: 0 }, commercial: { kw: 0, projects: 0 }, public: { kw: 0, projects: 0 }, other: { kw: 0, projects: 0 } }
@@ -72,7 +78,7 @@ function officialCities() {
 function addGazetteer(cities) {
   const rows = readFileSync(sources.gazetteer, 'utf8').trim().split(/\r?\n/);
   const header = rows.shift().trim().split(/\t/).map((value) => value.trim());
-  const indexes = Object.fromEntries(['GEOID', 'INTPTLAT', 'INTPTLONG'].map((name) => [name, header.indexOf(name)]));
+  const indexes = requireHeaders(header, ['GEOID', 'INTPTLAT', 'INTPTLONG'], 'Census Gazetteer');
   const byGeoid = new Map([...new Set(cities.values())].map((city) => [city.geoid, city]));
   for (const line of rows) {
     const row = line.split(/\t/).map((value) => value.trim());
@@ -165,10 +171,12 @@ async function aggregateEntry(entry, cities) {
   for await (const line of lines) {
     if (!indexes) {
       const header = parseCsv(line.replace(/^\uFEFF/, ''));
-      indexes = Object.fromEntries([
+      const fields = [
         ['city', 'Service City'], ['technology', 'Technology Type'], ['capacity', 'System Size DC'], ['approved', 'App Approved Date'],
         ['utility', 'Utility'], ['sector', 'Customer Sector'], ['storage', 'Storage Capacity (kWh)']
-      ].map(([field, name]) => [field, header.indexOf(name)]));
+      ];
+      requireHeaders(header, fields.map(([, name]) => name), entry);
+      indexes = Object.fromEntries(fields.map(([field, name]) => [field, header.indexOf(name)]));
       continue;
     }
     const row = parseCsv(line);
@@ -184,9 +192,10 @@ async function aggregateEntry(entry, cities) {
     city.utilities.add(row[indexes.utility] || 'Unknown');
     city.sectors[sector].kw += capacityKw;
     city.sectors[sector].projects += 1;
-    if (storageKwh > 0) { city.storageProjects += 1; city.storageKwh += storageKwh; }
+    if (storageKwh > 0) city.storageProjects += 1;
     const match = (row[indexes.approved] || '').match(/(19|20)\d{2}/);
-    const year = match ? Number(match[0]) : currentYear;
+    const parsedYear = match ? Number(match[0]) : currentYear;
+    const year = Math.max(2001, Math.min(currentYear, parsedYear));
     const annual = city.byYear.get(year) || { kw: 0, projects: 0 };
     annual.kw += capacityKw;
     annual.projects += 1;
@@ -243,11 +252,10 @@ const records = [...uniqueCities.values()].map((city) => {
     climateZone,
     yieldRange,
     generationGwh,
-    wattsPerPerson: population ? Number((capacityMw * 1_000_000 / population).toFixed(1)) : null,
     projects: city.projects,
     averageSystemKw: city.projects ? Number((city.capacityKw / city.projects).toFixed(1)) : 0,
     storageProjects: city.storageProjects,
-    storageMwh: Number((city.storageKwh / 1000).toFixed(2)),
+    storageCapacityStatus: 'withheld-source-units-inconsistent',
     growth5yPct,
     utilities: [...city.utilities].sort(),
     sectors,
@@ -263,14 +271,15 @@ const records = [...uniqueCities.values()].map((city) => {
 
 const payload = {
   meta: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     cityCount: records.length,
     totalCapacityMw: Number(records.reduce((sum, city) => sum + city.capacityMw, 0).toFixed(3)),
     populationCoverage: records.filter((city) => city.population).length,
     coordinateCoverage: records.filter((city) => city.coordinates).length,
     dataThrough,
     generatedAt: new Date().toISOString(),
-    capacityBasis: 'PTC kW-DC',
+    capacityBasis: 'System Size DC (kW), positive values only',
+    storageCapacityStatus: 'withheld-source-units-inconsistent',
     generationYield: { method: 'CEC climate-zone fleet bands', low: 1250, high: 1750, degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
     sources: [
       { name: 'California Distributed Generation Statistics', role: 'Interconnected project sites', url: 'https://www.californiadgstats.ca.gov/downloads/' },

@@ -8,9 +8,9 @@ The interface is designed for GitHub Pages: no server, database, API keys, or ru
 
 - Search all 483 incorporated California cities
 - Climate-zone and vintage-adjusted annual generation ranges
-- Reported capacity, watts per resident, five-year growth, project counts, customer sectors, and storage
+- Reported capacity, five-year growth, project counts, customer sectors, and storage-linked site counts
 - Interactive statewide choropleth using official incorporated-city polygons
-- Rankings with population and utility-coverage controls
+- Rankings with population and utility-coverage controls; per-resident ranking is withheld because the numerator and denominator use incompatible geographies
 - Four-city comparison
 - Shareable city URLs plus CSV and SVG downloads
 - Explicit measured, modeled, partial-coverage, and unavailable states
@@ -47,10 +47,16 @@ The scripts keep the large raw files outside the repository and emit compact cit
 - Each installation vintage receives 0.5% annual degradation before the generation range is calculated.
 - Solar share is shown only for cities with an explicitly onboarded load record and equals degradation-adjusted gross generation divided by grid deliveries plus degradation-adjusted gross generation.
 - Service-city strings are not a parcel-level spatial join. The interface discloses this and other limitations prominently.
+- Population follows legal city boundaries and is descriptive only. The application does not divide it into service-city capacity or publish a per-resident ranking.
+- Storage-linked sites are counted, but aggregate MWh is withheld because the source `Storage Capacity (kWh)` field contains inconsistent scales relative to storage kW.
 - The source ZIP contains PG&E, SCE, and SDG&E files. Municipal utility systems such as LADWP and SMUD are outside its coverage, so affected city totals are lower bounds.
 - Historical charts group currently listed projects by approval date. They are labeled as a proxy because superseding applications can change the apparent vintage.
 
 Run `npm test` to validate schema, city coverage, capacity, generation arithmetic, climate zones, population matches, and known utility warnings.
+
+## Security and dependency maintenance
+
+GitHub CodeQL, secret scanning with push protection, private vulnerability reporting, dependency review, and Dependabot security updates protect the public repository. `.github/dependabot.yml` also schedules weekly npm and GitHub Actions version updates. See [SECURITY.md](SECURITY.md) for private reporting.
 
 ## Deployment
 
