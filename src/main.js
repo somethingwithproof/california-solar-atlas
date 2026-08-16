@@ -19,7 +19,10 @@ const uniqueCities = (cities) => [...new Map(cities.filter(Boolean).map((city) =
 const generationRange = (city) => city.totalGenerationRangeGwh || city.generationGwh;
 const generationMid = (city) => (generationRange(city).low + generationRange(city).high) / 2;
 const capacityRange = (city) => city.totalCapacityRangeMwDc || { low: city.capacityMw, high: city.capacityMw };
-const capacityMid = (city) => (capacityRange(city).low + capacityRange(city).high) / 2;
+const capacityFloor = (city) => capacityRange(city).low;
+const rangeText = ({ low, high }, unit) => low === high ? `${format.format(low)} ${unit}` : `${format.format(low)}\u2013${format.format(high)} ${unit}`;
+// Sorting and shading need one number; the label must still show the band.
+const metricDisplay = (config, city) => config.displayCity ? config.displayCity(city) : metricDisplay(config, city);
 const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ? generationMid(city) / (deliveries + generationMid(city)) * 100 : null;
 const coverageStatus = (city) => ['reported', 'partial', 'unverified'].includes(city.coverage?.status) ? city.coverage.status : 'unverified';
 const zoneLabel = (city) => city.climateZone == null ? 'unassigned' : escapeHtml(city.climateZone);
@@ -53,8 +56,8 @@ const glossary = {
 const term = (label, key) => `<span class="term" tabindex="0" role="note" aria-label="${escapeHtml(label)}. ${escapeHtml(glossary[key])}">${escapeHtml(label)}<i class="tip" aria-hidden="true">${escapeHtml(glossary[key])}</i></span>`;
 
 const metricConfig = {
-  capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: capacityMid, display: (value) => `${format.format(value)} MW` },
-  generation: { label: 'Estimated generation', short: 'GWh/year', value: generationMid, display: (value) => `${format.format(value)} GWh` },
+  capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: capacityFloor, display: (value) => `${format.format(value)} MW`, displayCity: (city) => rangeText(capacityRange(city), 'MW') },
+  generation: { label: 'Estimated generation', short: 'GWh/year', value: generationMid, display: (value) => `${format.format(value)} GWh`, displayCity: (city) => rangeText(generationRange(city), 'GWh') },
   growth5yPct: { label: 'Five-year growth', short: '5-year growth', value: (city) => city.growth5yPct, display: (value) => `${format.format(value)}%` }
 };
 
@@ -90,7 +93,7 @@ function shell(meta) {
         <div class="map-layout"><div id="solar-map" class="solar-map"></div><aside id="map-summary" class="map-summary"></aside></div>
       </section>
       <section id="rankings" class="rankings section-pad">
-        <div class="section-heading"><div><div class="eyebrow"><span></span> Comparable measures</div><h2>City rankings.</h2></div><p>Rank reported totals and approval-date growth. Capacity here includes attributed municipal utility capacity, so it matches each city page. Per-resident ranking is intentionally withheld because service-city capacity and legal-boundary population are incompatible geographies.</p></div>
+        <div class="section-heading"><div><div class="eyebrow"><span></span> Comparable measures</div><h2>City rankings.</h2></div><p>Rank reported totals and approval-date growth. Cities served by a municipal utility carry attributed capacity but stay marked partial, so clear the coverage filter below to see them. Per-resident ranking is intentionally withheld because service-city capacity and legal-boundary population are incompatible geographies.</p></div>
         <div class="rank-toolbar"><label for="rank-metric">Rank by</label><select id="rank-metric">${metricOptions(state.rankMetric)}</select><label class="toggle"><input id="minimum-population" type="checkbox" checked><span></span> Population 10,000+</label><label class="toggle"><input id="exclude-geography-risk" type="checkbox" checked><span></span> Exclude geography risk or unknown</label><label class="toggle"><input id="exclude-partial" type="checkbox" checked><span></span> Exclude partial coverage</label></div>
         <div id="ranking-table" class="ranking-table"></div>
       </section>
@@ -132,7 +135,7 @@ function limitsDialog(meta) {
   return `<dialog class="limits-dialog" aria-labelledby="limits-title"><form method="dialog"><button class="dialog-close" aria-label="Close data limitations">×</button></form><div class="eyebrow"><span></span> Data limitations</div><h2 id="limits-title">What this data can—and cannot—tell you.</h2><div class="limits-list">
     <article><b>Reported capacity is not production.</b><p>DC nameplate comes from interconnected project records. Generation uses a CEC climate-zone fleet range and 0.5% annual degradation, not production meters.</p></article>
     <article><b>Service city is mailing geography.</b><p>The May 2026 public Project Sites files contain city and ZIP but no project coordinates or street addresses. Totals cannot yet be spatially joined to municipal polygons. Cities where residential project sites exceed 35% of legal-boundary housing units are flagged as likely mailing inflation and excluded from rankings by default; this is a screening heuristic, not a corrected boundary total.</p></article>
-    <article><b>County geography is source-reported.</b><p>County views aggregate the source's Service County field and include unincorporated records. Their current totals still cover only PG&amp;E, SCE, and SDG&amp;E. A separate CEC 2024 all-utility, MW-AC benchmark covers systems 1 MW and smaller; it is not additive to the newer MW-DC inventory. County generation uses only the current IOU inventory and a statewide 1,250–1,750 kWh/kW-DC yield envelope. City views omit ${integer.format(meta.unmatchedProjects)} project rows (${format.format(meta.unmatchedCapacityMw)} MW-DC) whose service-city strings do not match an incorporated city.</p></article>
+    <article><b>County geography is source-reported.</b><p>County views aggregate the source's Service County field and include unincorporated records. Their current totals still cover only PG&amp;E, SCE, and SDG&amp;E. A separate CEC 2024 all-utility, MW-AC benchmark covers systems 1 MW and smaller; it is not additive to the newer MW-DC inventory. County generation uses only the current IOU inventory and a statewide 1,250–1,750 kWh/kW-DC yield envelope. City views omit ${integer.format(meta.unmatchedProjects)} project rows (${format.format(meta.unmatchedCapacityMw)} MW-DC) whose service-city strings do not match an incorporated city. A further ${integer.format(meta.unresolvedCountyProjects)} rows (${format.format(meta.unresolvedCountyCapacityMw)} MW-DC) carry a Service County this build does not recognize and are dropped from both the county and city totals.</p></article>
     <article><b>Per-resident rankings are withheld.</b><p>Dividing service-city capacity by legal-boundary population can turn a mailing shadow into a false adoption result. Population remains descriptive only and is not used to rank cities.</p></article>
     <article><b>Utility coverage varies.</b><p>Project records cover PG&amp;E, SCE, and SDG&amp;E only. ${municipalCoverage} Project counts, sector splits, and growth curves remain PG&amp;E, SCE, and SDG&amp;E only for every city.</p></article>
     <article><b>Historical growth is a proxy.</b><p>The chart groups currently listed projects by application approval date, which generally precedes permission to operate. A superseding application can also inherit a later date, so the series is not a frozen historical inventory.</p></article>
@@ -298,11 +301,11 @@ function renderMap() {
     const path = state.boundaries[city.geoid]; if (!path || !/^[MLZ0-9 .-]+$/.test(path)) return '';
     const heat = Math.round(Math.min(config.value(city) / cap, 1) * 10);
     const status = coverageStatus(city);
-    return `<path class="map-city heat-${heat} ${status}" d="${path}" data-city-id="${escapeHtml(city.id)}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${config.display(config.value(city))}"><title>${escapeHtml(city.name)} · ${config.display(config.value(city))} · ${coverageLabel(status)}</title></path>`;
+    return `<path class="map-city heat-${heat} ${status}" d="${path}" data-city-id="${escapeHtml(city.id)}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${metricDisplay(config, city)}"><title>${escapeHtml(city.name)} · ${metricDisplay(config, city)} · ${coverageLabel(status)}</title></path>`;
   }).join('');
   document.querySelector('#solar-map').innerHTML = `<svg viewBox="0 0 520 650" role="img" aria-label="California incorporated cities shaded by ${config.label}"><path class="state-outline" d="M28 13L236 13L236 204L490 459L486 603L372 615L307 522L213 494L118 325Z"/>${paths}</svg>`;
   const top = cities.filter((city) => city.geographyRisk === 'not-flagged').sort((a, b) => config.value(b) - config.value(a)).slice(0, 5);
-  const summaryRows = top.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><i>${index + 1}</i><span>${escapeHtml(city.name)}<small>${escapeHtml(city.county)} County</small></span><strong>${config.display(config.value(city))}</strong></button>`).join('');
+  const summaryRows = top.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><i>${index + 1}</i><span>${escapeHtml(city.name)}<small>${escapeHtml(city.county)} County</small></span><strong>${metricDisplay(config, city)}</strong></button>`).join('');
   document.querySelector('#map-summary').innerHTML = `<span>Highest ${config.label.toLowerCase()}</span>${summaryRows}<p>Official polygons; shading uses service-city aggregates. Empty municipal polygons have no comparable value.</p>`;
 }
 
@@ -317,7 +320,7 @@ function renderRankings() {
     return;
   }
   const max = config.value(ranked[0]) || 1;
-  const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${config.display(config.value(city))}</b></span>${qualityBadge(city, true)}</button>`).join('');
+  const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${metricDisplay(config, city)}</b></span>${qualityBadge(city, true)}</button>`).join('');
   document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${rows}`;
 }
 
@@ -331,7 +334,7 @@ function renderCompare() {
   if (!state.compare.length) { document.querySelector('#compare-view').innerHTML = '<div class="compare-empty">Search above to add cities to this comparison.</div>'; return; }
   const metrics = [['capacityMw', 'Reported capacity', 'MW'], ['projects', 'Project sites', 'sites'], ['generation', 'Generation midpoint', 'GWh'], ['growth5yPct', 'Five-year growth', '%']];
   const metricRow = (city, [metric, label, unit]) => {
-    const getValue = (item) => ({ generation: generationMid, capacityMw: capacityMid })[metric]?.(item) ?? item[metric];
+    const getValue = (item) => ({ generation: generationMid, capacityMw: capacityFloor })[metric]?.(item) ?? item[metric];
     const value = getValue(city);
     const max = Math.max(...state.compare.map((item) => getValue(item) || 0), 1);
     const display = value == null ? '—' : `${format.format(value)} ${unit}`;

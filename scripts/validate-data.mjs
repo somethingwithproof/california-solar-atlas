@@ -29,8 +29,12 @@ assert.ok(Number.isFinite(data.meta.unresolvedCountyCapacityMw) && data.meta.unr
 assert.ok(Number.isInteger(data.meta.unresolvedServiceCounties) && data.meta.unresolvedServiceCounties >= 0, 'Unresolved service-county name count missing');
 // The build tolerates a bad source row but must not absorb a layout change, and the
 // reconciliations above cannot see it because they compare post-drop aggregates.
+// Pinned to the current release rather than a range: at zero a `>=` bound is vacuous,
+// so any future drop must be looked at and this number updated deliberately.
+assert.equal(data.meta.unresolvedCountyProjects, 0, 'A source row now has an unrecognized Service County; confirm it is a bad row, then update this expectation');
+assert.equal(data.meta.unresolvedCountyCapacityMw, 0, 'Unresolved service-county capacity is no longer zero; confirm and update this expectation');
+assert.equal(data.meta.unresolvedServiceCounties, 0, 'A new unrecognized Service County name appeared; confirm and update this expectation');
 assert.ok(data.meta.unresolvedCountyCapacityMw <= data.meta.sourceCapacityMw * 0.005, 'Unresolved service-county capacity exceeds the drop ceiling');
-assert.ok(data.meta.unresolvedServiceCounties <= 5, 'Too many distinct unresolved service-county names');
 assert.equal(data.counties.length, 58, 'Expected all California counties');
 assert.ok(Math.abs(data.counties.reduce((sum, county) => sum + county.allUtilityBenchmark.capacityMwAc, 0) - 17411.637) <= .001, 'CEC all-utility county benchmark does not reconcile to statewide total');
 assert.equal(data.meta.allUtilityBenchmark.statewideCapacityMwAc, 17411.637, 'CEC statewide benchmark drifted');
