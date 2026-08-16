@@ -1,0 +1,56 @@
+name: Publish analytical data release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - public/data/cities.json
+      - scripts/export-parquet.py
+      - scripts/validate-parquet.py
+      - requirements-data-release.txt
+      - data/cec-county-solar-2024.json
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  release:
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install Parquet exporter
+        run: python -m pip install --requirement requirements-data-release.txt
+      - name: Build and verify release assets
+        run: |
+          python scripts/export-parquet.py
+          (cd dist-data && sha256sum --check SHA256SUMS)
+          python scripts/validate-parquet.py
+      - name: Attest release assets
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: dist-data/*
+      - name: Publish immutable snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          source_date=$(python -c "import datetime,json; data=json.load(open('public/data/cities.json')); print(datetime.datetime.strptime(data['meta']['dataThrough'], '%B %d, %Y').date().isoformat())")
+          schema=$(jq --raw-output '.meta.schemaVersion' public/data/cities.json)
+          tag="data-${source_date}-schema${schema}-${GITHUB_SHA::8}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to overwrite an analytical snapshot."
+            exit 1
+          fi
+          gh release create "$tag" dist-data/* \
+            --target "$GITHUB_SHA" \
+            --title "California Solar Atlas data through ${source_date}" \
+            --notes "Flat Parquet snapshots for cities, counties, and annual timelines. Browser JSON remains the canonical application payload. See metadata.json and SHA256SUMS for provenance and integrity."

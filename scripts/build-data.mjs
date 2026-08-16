@@ -5,6 +5,7 @@ import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 
 const projectRoot = resolve(import.meta.dirname, '..');
+const unzipCommand = '/usr/bin/unzip';
 const sources = {
   cities: resolve(process.env.CA_CITY_CSV || '/tmp/ca-cities.csv'),
   projects: resolve(process.env.CA_DG_ZIP || '/tmp/ca-dg-projects.zip'),
@@ -15,8 +16,10 @@ const sources = {
 const output = resolve(projectRoot, 'public/data/cities.json');
 const loadRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/load-sources.json'), 'utf8'));
 const coverageRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/utility-coverage.json'), 'utf8'));
+const cecCountyBenchmark = JSON.parse(readFileSync(resolve(projectRoot, 'data/cec-county-solar-2024.json'), 'utf8'));
 let dataThrough = process.env.DATA_THROUGH || '';
 const currentYear = Number(process.env.DATA_YEAR || 2026);
+const countyNames = new Map();
 
 function decodeXml(value = '') {
   return value.replace(/<[^>]+>/g, '').replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
@@ -46,8 +49,14 @@ function requireHeaders(header, names, sourceName) {
 }
 
 function key(value = '') {
-  return value.toUpperCase().replace(/^CITY OF /, '').replace(/^TOWN OF /, '').replace(/[^A-Z0-9]/g, '');
+  return value.normalize('NFD').replace(/\p{M}/gu, '').toUpperCase().replace(/^(CITY|TOWN) OF /, '').replace(/[^A-Z0-9]/g, '');
 }
+
+const cityAliases = new Map([
+  ['AMADOR', 'AMADORCITY'], ['ANGELSCITY', 'ANGELS'], ['CALIFORNIACITY', 'CALIFORNIA'],
+  ['ELPASODEROBLESPASOROBLES', 'PASOROBLES'], ['SANBUENAVENTURAVENTURA', 'VENTURA']
+]);
+const cityKey = (value = '') => cityAliases.get(key(value)) || key(value);
 
 function officialCities() {
   const lines = readFileSync(sources.cities, 'utf8').replace(/^\uFEFF/, '').trim().split(/\r?\n/);
@@ -63,21 +72,25 @@ function officialCities() {
     if (!cdtfaCode) throw new Error(`${name}: missing CDTFA city identifier`);
     if (geoid && !/^06\d{5}$/.test(geoid)) throw new Error(`${name}: invalid California place GEOID`);
     const id = key(name);
+    const displayName = ({ ANGELS: 'Angels Camp', CALIFORNIA: 'California City' })[id] || name;
     if (!cities.has(id)) cities.set(id, {
       id: geoid || `cdtfa-${cdtfaCode}`,
-      name,
+      name: displayName,
       county: (row[indexes.CDTFA_COUNTY] || '').replace(/ County$/, ''),
       geoid,
       capacityKw: 0,
       projects: 0,
       storageProjects: 0,
       storageInvalidValues: 0,
+      undatedKw: 0,
+      undatedProjects: 0,
       utilities: new Set(),
       byYear: new Map(),
-      sectors: { residential: { kw: 0, projects: 0 }, commercial: { kw: 0, projects: 0 }, public: { kw: 0, projects: 0 }, other: { kw: 0, projects: 0 } }
+      sectors: { residential: { kw: 0, projects: 0 }, commercial: { kw: 0, projects: 0 }, agricultural: { kw: 0, projects: 0 }, public: { kw: 0, projects: 0 }, other: { kw: 0, projects: 0 } }
     });
   }
   if (cities.has('ANGELS')) cities.set('ANGELSCAMP', cities.get('ANGELS'));
+  if (cities.has('CALIFORNIA')) cities.set('CALIFORNIACITY', cities.get('CALIFORNIA'));
   return cities;
 }
 
@@ -98,13 +111,15 @@ function addGazetteer(cities) {
 }
 
 function addPopulation(cities) {
-  const stringsXml = execFileSync('unzip', ['-p', sources.population, 'xl/sharedStrings.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
+  const stringsXml = execFileSync(unzipCommand, ['-p', sources.population, 'xl/sharedStrings.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
   const strings = (stringsXml.match(/<si[\s>][\s\S]*?<\/si>/g) || []).map(decodeXml);
   const countyKeys = new Set([...new Set(cities.values())].map((city) => key(city.county)));
   const addSheetValues = (sheetPath, property) => {
-    const sheet = execFileSync('unzip', ['-p', sources.population, sheetPath], { encoding: 'utf8', maxBuffer: 20_000_000 });
+    const sheet = execFileSync(unzipCommand, ['-p', sources.population, sheetPath], { encoding: 'utf8', maxBuffer: 20_000_000 });
     const rows = sheet.match(/<row[\s>][\s\S]*?<\/row>/g) || [];
     let currentCounty = '';
+    let titleVerified = false;
+    let columnVerified = false;
     for (const xml of rows) {
       const values = {};
       for (const cell of xml.match(/<c[\s>][\s\S]*?<\/c>/g) || []) {
@@ -113,14 +128,35 @@ function addPopulation(cities) {
         values[column] = cell.includes(' t="s"') ? strings[Number(raw)] : raw;
       }
       const nameKey = key(values.A);
-      if (!nameKey || nameKey === 'CALIFORNIA' || nameKey === 'STATECOUNTYCITY') continue;
-      if (countyKeys.has(nameKey) && nameKey !== currentCounty) { currentCounty = nameKey; continue; }
-      const city = cities.get(nameKey);
-      if (city && key(city.county) === currentCounty && Number(values.C) > 0) city[property] = Number(values.C);
+      if (String(values.A || '').startsWith(property === 'housingUnits' ? 'E-1H:' : 'E-1:')) titleVerified = true;
+      if (nameKey === 'STATECOUNTYCITY') {
+        if (!String(values.C || '').includes('1/1/2026')) throw new Error(`${sheetPath}: expected 2026 value in column C`);
+        columnVerified = true;
+        continue;
+      }
+      if (!nameKey || nameKey === 'CALIFORNIA') continue;
+      const city = cities.get(cityKey(values.A));
+      if (city && (key(city.county) === currentCounty || key(city.county) === nameKey)) {
+        if (key(city.county) === nameKey) currentCounty = nameKey;
+        if (Number(values.C) > 0) city[property] = Number(values.C);
+        continue;
+      }
+      if (countyKeys.has(nameKey) && nameKey !== currentCounty) { currentCounty = nameKey; countyNames.set(nameKey, values.A); continue; }
     }
+    if (!titleVerified || !columnVerified) throw new Error(`${sheetPath}: workbook title or column layout changed`);
   };
   addSheetValues('xl/worksheets/sheet2.xml', 'population');
   addSheetValues('xl/worksheets/sheet4.xml', 'housingUnits');
+  const countySheet = execFileSync(unzipCommand, ['-p', sources.population, 'xl/worksheets/sheet3.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
+  let readingCounties = false;
+  for (const xml of countySheet.match(/<row[\s>][\s\S]*?<\/row>/g) || []) {
+    const cell = (xml.match(/<c[\s>][\s\S]*?<\/c>/g) || []).find((value) => / r="A\d+"/.test(value));
+    const raw = cell?.match(/<v>(.*?)<\/v>/)?.[1];
+    const name = cell?.includes(' t="s"') ? strings[Number(raw)] : raw;
+    if (name === 'Alameda') readingCounties = true;
+    if (readingCounties && name) countyNames.set(key(name), name);
+    if (name === 'Yuba') break;
+  }
 }
 
 function pointInRing([x, y], ring) {
@@ -141,12 +177,33 @@ function pointInPolygon(point, polygon) {
 function addClimateZones(cities) {
   const zones = JSON.parse(readFileSync(sources.climateZones, 'utf8')).features;
   for (const city of new Set(cities.values())) {
+    if (!city.coordinates && key(city.name) === 'MOUNTAINHOUSE') {
+      city.climateZone = 12;
+      city.climateZoneMethod = 'reviewed-override';
+      continue;
+    }
     if (!city.coordinates) continue;
     const feature = zones.find(({ geometry }) => {
       const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
       return polygons.some((polygon) => pointInPolygon(city.coordinates, polygon));
     });
-    city.climateZone = feature ? Number(feature.properties.BZone) : null;
+    if (feature) {
+      city.climateZone = Number(feature.properties.BZone);
+      city.climateZoneMethod = 'representative-point';
+      continue;
+    }
+    let nearest = null;
+    for (const candidate of zones) {
+      const polygons = candidate.geometry.type === 'Polygon' ? [candidate.geometry.coordinates] : candidate.geometry.coordinates;
+      for (const polygon of polygons) {
+        for (const [longitude, latitude] of polygon[0]) {
+          const distance = (longitude - city.coordinates[0]) ** 2 + (latitude - city.coordinates[1]) ** 2;
+          if (!nearest || distance < nearest.distance) nearest = { distance, zone: Number(candidate.properties.BZone) };
+        }
+      }
+    }
+    city.climateZone = nearest?.zone || null;
+    city.climateZoneMethod = nearest ? 'nearest-polygon' : 'unassigned';
   }
 }
 
@@ -161,13 +218,43 @@ const climateYields = {
 
 function sectorKey(value = '') {
   if (/residential/i.test(value)) return 'residential';
-  if (/commercial|industrial|agricultural/i.test(value)) return 'commercial';
+  if (/agricultural/i.test(value)) return 'agricultural';
+  if (/commercial|industrial/i.test(value)) return 'commercial';
   if (/government|non-profit|school|public/i.test(value)) return 'public';
   return 'other';
 }
 
+function emptyAggregate(name = '') {
+  return {
+    name, capacityKw: 0, projects: 0, storageProjects: 0, storageInvalidValues: 0,
+    undatedKw: 0, undatedProjects: 0, utilities: new Set(), byYear: new Map(),
+    sectors: { residential: { kw: 0, projects: 0 }, commercial: { kw: 0, projects: 0 }, agricultural: { kw: 0, projects: 0 }, public: { kw: 0, projects: 0 }, other: { kw: 0, projects: 0 } }
+  };
+}
+
+function addProject(target, { capacityKw, sector, storageRaw, utility, year }) {
+  const parsedStorageKwh = storageRaw ? Number(storageRaw) : 0;
+  const storageIsValid = Number.isFinite(parsedStorageKwh) && parsedStorageKwh >= 0;
+  if (!storageIsValid) target.storageInvalidValues += 1;
+  target.capacityKw += capacityKw;
+  target.projects += 1;
+  target.utilities.add(utility || 'Unknown');
+  target.sectors[sector].kw += capacityKw;
+  target.sectors[sector].projects += 1;
+  if (storageIsValid && parsedStorageKwh > 0) target.storageProjects += 1;
+  if (year == null) {
+    target.undatedKw += capacityKw;
+    target.undatedProjects += 1;
+    return;
+  }
+  const annual = target.byYear.get(year) || { kw: 0, projects: 0 };
+  annual.kw += capacityKw;
+  annual.projects += 1;
+  target.byYear.set(year, annual);
+}
+
 async function zipEntries() {
-  const text = execFileSync('unzip', ['-Z1', sources.projects], { encoding: 'utf8' });
+  const text = execFileSync(unzipCommand, ['-Z1', sources.projects], { encoding: 'utf8' });
   return text.trim().split(/\r?\n/).filter((name) => name.endsWith('.csv'));
 }
 
@@ -178,15 +265,15 @@ function inferDataThrough(entries) {
   return Number.isFinite(Number(latest)) ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(latest) : 'Unknown release';
 }
 
-async function aggregateEntry(entry, cities) {
-  const process = spawn('unzip', ['-p', sources.projects, entry]);
-  const lines = createInterface({ input: process.stdout, crlfDelay: Infinity });
+async function aggregateEntry(entry, cities, counties, dropped) {
+  const child = spawn(unzipCommand, ['-p', sources.projects, entry]);
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   let indexes;
   for await (const line of lines) {
     if (!indexes) {
       const header = parseCsv(line.replace(/^\uFEFF/, ''));
       const fields = [
-        ['city', 'Service City'], ['technology', 'Technology Type'], ['capacity', 'System Size DC'], ['approved', 'App Approved Date'],
+        ['city', 'Service City'], ['county', 'Service County'], ['technology', 'Technology Type'], ['capacity', 'System Size DC'], ['approved', 'App Approved Date'],
         ['utility', 'Utility'], ['sector', 'Customer Sector'], ['storage', 'Storage Capacity (kWh)']
       ];
       requireHeaders(header, fields.map(([, name]) => name), entry);
@@ -199,29 +286,24 @@ async function aggregateEntry(entry, cities) {
     if (!/photovoltaic/i.test(row[indexes.technology] || '')) continue;
     const capacityKw = Number(row[indexes.capacity]);
     if (!Number.isFinite(capacityKw) || capacityKw <= 0) continue;
-    const city = cities.get(key(row[indexes.city]));
-    if (!city) continue;
     const sector = sectorKey(row[indexes.sector]);
     const storageRaw = (row[indexes.storage] || '').trim();
-    const parsedStorageKwh = storageRaw ? Number(storageRaw) : 0;
-    const storageIsValid = Number.isFinite(parsedStorageKwh) && parsedStorageKwh >= 0;
-    if (!storageIsValid) city.storageInvalidValues += 1;
-    const storageKwh = storageIsValid ? parsedStorageKwh : 0;
-    city.capacityKw += capacityKw;
-    city.projects += 1;
-    city.utilities.add(row[indexes.utility] || 'Unknown');
-    city.sectors[sector].kw += capacityKw;
-    city.sectors[sector].projects += 1;
-    if (storageKwh > 0) city.storageProjects += 1;
     const match = (row[indexes.approved] || '').match(/(19|20)\d{2}/);
-    const parsedYear = match ? Number(match[0]) : currentYear;
-    const year = Math.max(2001, Math.min(currentYear, parsedYear));
-    const annual = city.byYear.get(year) || { kw: 0, projects: 0 };
-    annual.kw += capacityKw;
-    annual.projects += 1;
-    city.byYear.set(year, annual);
+    const parsedYear = match ? Number(match[0]) : null;
+    const year = parsedYear == null || parsedYear > currentYear ? null : Math.max(2001, parsedYear);
+    const project = { capacityKw, sector, storageRaw, utility: row[indexes.utility], year };
+    const county = counties.get(key(row[indexes.county]));
+    if (!county) throw new Error(`${entry}: unknown Service County ${row[indexes.county] || '(blank)'}`);
+    addProject(county, project);
+    const city = cities.get(cityKey(row[indexes.city]));
+    if (city) addProject(city, project);
+    else {
+      dropped.projects += 1;
+      dropped.capacityKw += capacityKw;
+      dropped.serviceCities.add((row[indexes.city] || 'blank').trim() || 'blank');
+    }
   }
-  const status = await new Promise((done) => process.on('close', done));
+  const status = await new Promise((done) => child.on('close', done));
   if (status !== 0) throw new Error(`Could not read ${entry}`);
 }
 
@@ -229,12 +311,14 @@ const cities = officialCities();
 addGazetteer(cities);
 addPopulation(cities);
 addClimateZones(cities);
+const countyAggregates = new Map([...countyNames].map(([countyKey, name]) => [countyKey, emptyAggregate(name)]));
 const uniqueCities = new Map([...cities.values()].map((city) => [city.id, city]));
 const entries = await zipEntries();
 if (!dataThrough) dataThrough = inferDataThrough(entries);
+const dropped = { projects: 0, capacityKw: 0, serviceCities: new Set() };
 for (const entry of entries) {
   process.stdout.write(`Aggregating ${entry}\n`);
-  await aggregateEntry(entry, cities);
+  await aggregateEntry(entry, cities, countyAggregates, dropped);
 }
 
 const municipalKeys = new Set(coverageRegistry.partialCities.map(key));
@@ -250,18 +334,22 @@ const records = [...uniqueCities.values()].map((city) => {
   }
   const capacityMw = Number((city.capacityKw / 1000).toFixed(3));
   const climateZone = city.climateZone || null;
-  const yieldRange = climateYields[climateZone] || [1400, 1550];
+  const yieldRange = climateYields[climateZone];
+  if (!yieldRange) throw new Error(`${city.name}: climate zone could not be assigned`);
+  const undatedLowEffectiveKw = city.undatedKw * (0.995 ** Math.max(0, currentYear - 2001));
+  const effectiveLowKw = effectiveKw + undatedLowEffectiveKw;
+  const effectiveHighKw = effectiveKw + city.undatedKw;
   const generationGwh = {
-    low: Number((effectiveKw * yieldRange[0] / 1_000_000).toFixed(1)),
-    high: Number((effectiveKw * yieldRange[1] / 1_000_000).toFixed(1))
+    low: Number((effectiveLowKw * yieldRange[0] / 1_000_000).toFixed(1)),
+    high: Number((effectiveHighKw * yieldRange[1] / 1_000_000).toFixed(1))
   };
   const population = city.population || null;
   const fiveYearsAgo = timeline.find((point) => point.year === currentYear - 5)?.mw || 0;
-  const growth5yPct = fiveYearsAgo > 0 ? Number(((capacityMw / fiveYearsAgo - 1) * 100).toFixed(1)) : null;
+  const growth5yPct = fiveYearsAgo > 0 ? Number(((timeline.at(-1).mw / fiveYearsAgo - 1) * 100).toFixed(1)) : null;
   const sectors = Object.fromEntries(Object.entries(city.sectors).map(([name, value]) => [name, { mw: Number((value.kw / 1000).toFixed(3)), projects: value.projects }]));
   const housingUnits = city.housingUnits || null;
   const residentialSiteHousingPct = housingUnits ? Number((sectors.residential.projects / housingUnits * 100).toFixed(1)) : null;
-  const geographyRisk = residentialSiteHousingPct > 35 ? 'likely-mailing-inflation' : 'not-flagged';
+  const geographyRisk = residentialSiteHousingPct == null ? 'unknown' : residentialSiteHousingPct > 35 ? 'likely-mailing-inflation' : 'not-flagged';
   const record = {
     name: city.name,
     county: city.county,
@@ -275,12 +363,16 @@ const records = [...uniqueCities.values()].map((city) => {
     residentialSiteHousingPct,
     geographyRisk,
     capacityMw,
-    effectiveCapacityMw: Number((effectiveKw / 1000).toFixed(3)),
+    effectiveCapacityMw: Number(((effectiveLowKw + effectiveHighKw) / 2000).toFixed(3)),
+    effectiveCapacityRangeMw: { low: Number((effectiveLowKw / 1000).toFixed(3)), high: Number((effectiveHighKw / 1000).toFixed(3)) },
     degradationRatePct: 0.5,
     climateZone,
+    climateZoneMethod: city.climateZoneMethod,
     yieldRange,
     generationGwh,
     projects: city.projects,
+    undatedProjects: city.undatedProjects,
+    undatedCapacityMw: Number((city.undatedKw / 1000).toFixed(3)),
     averageSystemKw: city.projects ? Number((city.capacityKw / city.projects).toFixed(1)) : 0,
     storageProjects: city.storageProjects,
     storageInvalidValues: city.storageInvalidValues,
@@ -298,29 +390,89 @@ const records = [...uniqueCities.values()].map((city) => {
   return record;
 }).sort((a, b) => a.name.localeCompare(b.name));
 
+const counties = [...countyAggregates.values()].sort((a, b) => a.name.localeCompare(b.name)).map((county) => {
+  const name = county.name;
+  const members = records.filter((city) => key(city.county) === key(name));
+  let cumulativeKw = 0;
+  let effectiveKw = 0;
+  const timeline = [];
+  for (let year = 2001; year <= currentYear; year += 1) {
+    const annual = county.byYear.get(year) || { kw: 0, projects: 0 };
+    cumulativeKw += annual.kw;
+    effectiveKw += annual.kw * (0.995 ** Math.max(0, currentYear - year));
+    timeline.push({ year, mw: Number((cumulativeKw / 1000).toFixed(3)) });
+  }
+  const capacityMw = Number((county.capacityKw / 1000).toFixed(3));
+  const matchedCityCapacityMw = Number(members.reduce((total, city) => total + city.capacityMw, 0).toFixed(3));
+  const effectiveLowKw = effectiveKw + county.undatedKw * (0.995 ** Math.max(0, currentYear - 2001));
+  const effectiveHighKw = effectiveKw + county.undatedKw;
+  const cecCapacityKwAc = cecCountyBenchmark.countiesKwAc[name];
+  if (!Number.isInteger(cecCapacityKwAc) || cecCapacityKwAc < 0) throw new Error(`${name}: missing CEC all-utility county benchmark`);
+  return {
+    name,
+    slug: key(name).toLowerCase(),
+    cityCount: members.length,
+    capacityMw,
+    matchedCityCapacityMw,
+    outsideMatchedCitiesMw: Number(Math.max(0, capacityMw - matchedCityCapacityMw).toFixed(3)),
+    generationGwh: {
+      low: Number((effectiveLowKw * 1250 / 1_000_000).toFixed(1)),
+      high: Number((effectiveHighKw * 1750 / 1_000_000).toFixed(1))
+    },
+    projects: county.projects,
+    undatedProjects: county.undatedProjects,
+    undatedCapacityMw: Number((county.undatedKw / 1000).toFixed(3)),
+    storageProjects: county.storageProjects,
+    allUtilityBenchmark: {
+      year: cecCountyBenchmark.year,
+      capacityMwAc: Number((cecCapacityKwAc / 1000).toFixed(3)),
+      basis: cecCountyBenchmark.basis,
+      sourceUrl: cecCountyBenchmark.sourceUrl
+    },
+    geographyRiskCities: members.filter((city) => city.geographyRisk === 'likely-mailing-inflation').length,
+    partialCities: members.filter((city) => city.coverage.status === 'partial').length,
+    sectors: Object.fromEntries(Object.entries(county.sectors).map(([sector, value]) => [sector, { mw: Number((value.kw / 1000).toFixed(3)), projects: value.projects }])),
+    timeline
+  };
+});
+
 const payload = {
   meta: {
-    schemaVersion: 5,
+    schemaVersion: 7,
     cityCount: records.length,
     totalCapacityMw: Number(records.reduce((sum, city) => sum + city.capacityMw, 0).toFixed(3)),
+    sourceCapacityMw: Number(counties.reduce((sum, county) => sum + county.capacityMw, 0).toFixed(3)),
+    sourceProjects: counties.reduce((sum, county) => sum + county.projects, 0),
+    allUtilityBenchmark: {
+      year: cecCountyBenchmark.year,
+      statewideCapacityMwAc: Number((cecCountyBenchmark.statewideKwAc / 1000).toFixed(3)),
+      basis: cecCountyBenchmark.basis,
+      sourceUrl: cecCountyBenchmark.sourceUrl
+    },
     populationCoverage: records.filter((city) => city.population).length,
     housingCoverage: records.filter((city) => city.housingUnits).length,
     geographyRiskCities: records.filter((city) => city.geographyRisk === 'likely-mailing-inflation').length,
+    geographyUnknownCities: records.filter((city) => city.geographyRisk === 'unknown').length,
     coordinateCoverage: records.filter((city) => city.coordinates).length,
     dataThrough,
     generatedAt: new Date().toISOString(),
     capacityBasis: 'System Size DC (kW), positive values only',
     storageCapacityStatus: 'withheld-source-units-inconsistent',
     storageInvalidValues: records.reduce((sum, city) => sum + city.storageInvalidValues, 0),
+    unmatchedProjects: dropped.projects,
+    unmatchedCapacityMw: Number((dropped.capacityKw / 1000).toFixed(3)),
+    unmatchedServiceCities: dropped.serviceCities.size,
     generationYield: { method: 'CEC climate-zone fleet bands', low: 1250, high: 1750, degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
     sources: [
       { name: 'California Distributed Generation Statistics', role: 'Interconnected project sites', url: 'https://www.californiadgstats.ca.gov/downloads/' },
       { name: 'California Department of Finance E-1/E-1H', role: '2026 city population and housing estimates', url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
       { name: 'U.S. Census Gazetteer', role: 'City representative coordinates', url: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.2024.html' },
-      { name: 'California Energy Commission', role: 'Building climate-zone polygons', url: 'https://www.energy.ca.gov/files/building-climate-zones-map' }
+      { name: 'California Energy Commission', role: 'Building climate-zone polygons', url: 'https://www.energy.ca.gov/files/building-climate-zones-map' },
+      { name: 'California Energy Commission CEC-1304B', role: '2024 all-utility county solar benchmark', url: cecCountyBenchmark.sourceUrl }
     ]
   },
-  cities: records
+  cities: records,
+  counties
 };
 
 mkdirSync(resolve(projectRoot, 'public/data'), { recursive: true });

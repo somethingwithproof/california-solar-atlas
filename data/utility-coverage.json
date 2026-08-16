@@ -1,6 +1,6 @@
 {
   "partialCities": [
-    "Alameda", "Anaheim", "Azusa", "Banning", "Biggs", "Burbank", "Cerritos", "Coachella", "Colton", "Glendale", "Gridley", "Healdsburg", "Lodi", "Lompoc", "Los Angeles", "Modesto", "Palo Alto", "Pasadena", "Redding", "Riverside", "Roseville", "Sacramento", "Santa Clara", "Shasta Lake", "Ukiah", "Vernon"
+    "Alameda", "Alturas", "Anaheim", "Azusa", "Banning", "Big Bear Lake", "Biggs", "Brawley", "Burbank", "Calexico", "Calipatria", "Ceres", "Cerritos", "Citrus Heights", "Coachella", "Colton", "Crescent City", "Dorris", "Dunsmuir", "El Centro", "Glendale", "Gridley", "Healdsburg", "Lodi", "Lompoc", "Los Angeles", "Modesto", "Palo Alto", "Pasadena", "Redding", "Riverside", "Roseville", "Sacramento", "Santa Clara", "Shasta Lake", "Ukiah", "Vernon"
   ],
   "notes": {
     "LOSANGELES": "LADWP projects are outside the three-IOU source files; this total reflects only reported SCE/SDG&E/PG&E records and is a substantial lower bound.",

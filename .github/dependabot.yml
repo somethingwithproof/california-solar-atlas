@@ -31,3 +31,14 @@ updates:
           - "*"
     commit-message:
       prefix: ci
+
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:15"
+      timezone: America/Los_Angeles
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: deps
