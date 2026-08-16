@@ -23,7 +23,12 @@ export function pouByCity(pouInputs, pouAttribution, cityKey) {
   const capacity = new Map(pouInputs.netMetering.utilities.map((utility) => [utility.utility, utility]));
   const overlap = new Map();
   for (const pair of pouInputs.territoryOverlap.pairs) overlap.set(overlapKey(pair.utility, pair.city), pair);
-  const { low: ilrLow, high: ilrHigh } = pouAttribution.inverterLoadingRatio;
+  // Guarded like mergeThresholdPct above: a zero or absent low would multiply every
+  // AC filer's capacity to a floor of zero, and `low <= high` downstream still passes.
+  const { low: ilrLow, high: ilrHigh } = pouAttribution.inverterLoadingRatio ?? {};
+  if (!Number.isFinite(ilrLow) || !Number.isFinite(ilrHigh) || ilrLow < 1 || ilrLow > ilrHigh) {
+    throw new Error(`data/pou-attribution.json inverterLoadingRatio must be finite with 1 <= low <= high, found ${JSON.stringify({ low: ilrLow, high: ilrHigh })}`);
+  }
   const merged = new Map();
   const excluded = [];
 

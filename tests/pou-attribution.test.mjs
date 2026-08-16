@@ -182,3 +182,15 @@ test('a missing merge threshold is refused rather than merging everything', () =
   assert.throws(() => pouByCity(inputs({ pairs: [pair('Testville Electric', 'Testville', 1)] }), broken, cityKey),
     /must set a numeric mergeThresholdPct/);
 });
+
+test('an unusable inverter loading ratio is refused rather than zeroing every AC filer', () => {
+  const entry = { eiaName: 'City of Testville - (CA)', territoryName: 'Testville Electric', city: 'Testville', decision: 'rule' };
+  const data = () => inputs({ pairs: [pair('Testville Electric', 'Testville', 99)] });
+
+  for (const ratio of [{ low: 0, high: 1.25 }, { low: null, high: 1.25 }, { low: 1.3, high: 1.25 }, undefined]) {
+    const broken = attribution([entry]);
+    broken.inverterLoadingRatio = ratio;
+    assert.throws(() => pouByCity(data(), broken, cityKey), /inverterLoadingRatio must be finite/,
+      `ratio ${JSON.stringify(ratio)} must not reach the conversion`);
+  }
+});
