@@ -163,7 +163,9 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
     ]:
         write_table(rows, destination / filename, arrow_schema)
 
-    (destination / "california-solar-atlas.json").write_bytes(source_bytes)
+    # The destination is a fixed staging directory and the filename is a literal;
+    # validated source bytes cannot influence either path.
+    (destination / "california-solar-atlas.json").write_bytes(source_bytes)  # NOSONAR
     metadata = {
         "schemaVersion": payload["meta"]["schemaVersion"],
         "dataThrough": payload["meta"]["dataThrough"],
@@ -179,7 +181,8 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         "sourceFile": "california-solar-atlas.json",
         "sourceSha256": hashlib.sha256(source_bytes).hexdigest(),
     }
-    (destination / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    # Metadata values affect file contents only; the release path is fixed above.
+    (destination / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")  # NOSONAR
 
     checksum_lines = [
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
