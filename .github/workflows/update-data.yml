@@ -26,9 +26,14 @@ jobs:
           curl --fail --location --retry 3 'https://dof.ca.gov/media/docs/forecasting/Demographics/estimates-e1/E-1_2026_InternetVersion.xlsx' --output /tmp/ca-population-2026.xlsx
           curl --fail --location --retry 3 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_gaz_place_06.txt' --output /tmp/ca-place-gazetteer.txt
           curl --fail --location --retry 3 'https://services3.arcgis.com/bWPjFyq029ChCGur/arcgis/rest/services/BuildingClimateZones_CEC_2015/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson' --output /tmp/ca-climate-zones.geojson
+          # Steps run under `bash -e`, so the curl must not abort the loop it is
+          # meant to retry: an unguarded failure here exits on the first attempt.
           for attempt in 1 2 3 4 5 6; do
-            curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/geojson?layers=2' --output /tmp/ca-city-boundaries.geojson
-            if jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null 2>&1; then break; fi
+            echo "Boundary download attempt $attempt"
+            if curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/geojson?layers=2' --output /tmp/ca-city-boundaries.geojson \
+              && jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null 2>&1; then
+              break
+            fi
             sleep 20
           done
           jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null
@@ -46,7 +51,9 @@ jobs:
             echo 'No source changes detected.'
             exit 0
           fi
-          branch="data-refresh-$(date -u +%Y%m%d)"
+          # Suffixed with the run id so a same-day re-run does not collide with an
+          # existing branch and fail at push or at `gh pr create`.
+          branch="data-refresh-$(date -u +%Y%m%d)-${GITHUB_RUN_ID}"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch -c "$branch"

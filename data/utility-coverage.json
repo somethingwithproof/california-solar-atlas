@@ -1,7 +1,47 @@
 {
+  "schemaVersion": 2,
+  "coverageBasis": "Coverage is determined by the utility that owns the distribution wires, because that utility files the interconnection record. Retail generation providers do not change coverage: a community choice aggregator sells the electricity but does not own the wires, so its cities appear in full through the incumbent investor-owned utility. Only a publicly owned utility that owns its own distribution system creates a gap.",
   "partialCities": [
     "Alameda", "Anaheim", "Azusa", "Banning", "Biggs", "Burbank", "Cerritos", "Coachella", "Colton", "Glendale", "Gridley", "Healdsburg", "Lodi", "Lompoc", "Los Angeles", "Modesto", "Palo Alto", "Pasadena", "Redding", "Riverside", "Roseville", "Sacramento", "Santa Clara", "Shasta Lake", "Ukiah", "Vernon"
   ],
+  "wiresUtility": {
+    "LOSANGELES": "LADWP",
+    "SACRAMENTO": "SMUD",
+    "SANTACLARA": "SVP",
+    "PALOALTO": "CPAU"
+  },
+  "utilities": {
+    "LADWP": {
+      "name": "Los Angeles Department of Water and Power",
+      "kind": "publicly-owned",
+      "hostingCapacityUrl": "https://www.ladwp.com/community/distributed-energy-resources"
+    },
+    "SMUD": {
+      "name": "Sacramento Municipal Utility District",
+      "kind": "publicly-owned",
+      "hostingCapacityUrl": "https://www.smud.org/Business-Solutions-and-Rebates/Interconnection"
+    },
+    "SVP": {
+      "name": "Silicon Valley Power",
+      "kind": "publicly-owned",
+      "hostingCapacityUrl": "https://www.siliconvalleypower.com/svp-and-community/solar"
+    },
+    "CPAU": {
+      "name": "City of Palo Alto Utilities",
+      "kind": "publicly-owned",
+      "hostingCapacityUrl": "https://www.cityofpaloalto.org/Departments/Utilities"
+    }
+  },
+  "independentBounds": {
+    "_comment": "Keyed by the same normalised city key as wiresUtility. Each entry requires capacityMw, year, sourceName, sourceUrl, and scope. Candidate sources: EIA Form 861 Schedule 4 (net metering, utility-territory resolution) and CEC SB 379 / SolarAPP+ permit reporting (city resolution). Deliberately empty: no figure is published here until it comes from a citable source, and a territory-wide figure must declare scope 'service-territory' so it is never read as a city total.",
+    "_shape": {
+      "capacityMw": 0,
+      "year": 0,
+      "scope": "service-territory | city",
+      "sourceName": "",
+      "sourceUrl": ""
+    }
+  },
   "notes": {
     "LOSANGELES": "LADWP projects are outside the three-IOU source files; this total reflects only reported SCE/SDG&E/PG&E records and is a substantial lower bound.",
     "SACRAMENTO": "SMUD projects are outside the three-IOU source files; this total is a substantial lower bound.",

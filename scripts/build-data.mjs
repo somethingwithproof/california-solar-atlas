@@ -17,9 +17,12 @@ const loadRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/load-sou
 const coverageRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/utility-coverage.json'), 'utf8'));
 let dataThrough = process.env.DATA_THROUGH || '';
 const currentYear = Number(process.env.DATA_YEAR || 2026);
+const populationYear = Number(process.env.POPULATION_YEAR || currentYear);
+const timelineStartYear = Number(process.env.TIMELINE_START_YEAR || 2001);
 
 function decodeXml(value = '') {
-  return value.replace(/<[^>]+>/g, '').replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
+  // &amp; must be decoded last, otherwise "&amp;lt;" collapses to "<".
+  return value.replace(/<[^>]+>/g, '').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&quot;', '"').replaceAll('&amp;', '&');
 }
 
 function parseCsv(line) {
@@ -81,12 +84,36 @@ function addGazetteer(cities) {
   }
 }
 
+// Department of Finance E-1 publishes a handful of cities under their full legal
+// name while CDTFA uses the common one. Left side is the E-1 spelling.
+const populationAliases = {
+  SANBUENAVENTURAVENTURA: 'VENTURA',
+  ELPASODEROBLESPASOROBLES: 'PASOROBLES',
+  CALIFORNIACITY: 'CALIFORNIA',
+  ANGELSCAMP: 'ANGELS'
+};
+// San Francisco is California's only consolidated city-county: E-1 gives it a
+// single row that serves as both the county header and the city.
+const consolidatedCityCounties = new Set(['SANFRANCISCO']);
+
 function addPopulation(cities) {
   const stringsXml = execFileSync('unzip', ['-p', sources.population, 'xl/sharedStrings.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
   const strings = (stringsXml.match(/<si[\s>][\s\S]*?<\/si>/g) || []).map(decodeXml);
   const sheet = execFileSync('unzip', ['-p', sources.population, 'xl/worksheets/sheet2.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
   const rows = sheet.match(/<row[\s>][\s\S]*?<\/row>/g) || [];
-  const countyKeys = new Set([...new Set(cities.values())].map((city) => key(city.county)));
+  const uniqueCities = [...new Set(cities.values())];
+  const countyKeys = new Set(uniqueCities.map((city) => key(city.county)));
+  // Indexed by county so a row whose name matches a county can still be read as
+  // a city of the section being scanned. "San Joaquin" is a city in Fresno
+  // County; treating it as a county header dropped its own population and every
+  // Fresno city listed after it.
+  const cityKeysByCounty = new Map();
+  for (const city of uniqueCities) {
+    const countyKey = key(city.county);
+    if (!cityKeysByCounty.has(countyKey)) cityKeysByCounty.set(countyKey, new Set());
+    cityKeysByCounty.get(countyKey).add(key(city.name));
+  }
+  const lookupCity = (nameKey) => cities.get(populationAliases[nameKey] || nameKey);
   let currentCounty = '';
   for (const xml of rows) {
     const values = {};
@@ -96,11 +123,25 @@ function addPopulation(cities) {
       values[column] = cell.includes(' t="s"') ? strings[Number(raw)] : raw;
     }
     const nameKey = key(values.A);
-    if (!nameKey || nameKey === 'CALIFORNIA' || nameKey === 'STATECOUNTYCITY') continue;
-    if (countyKeys.has(nameKey) && nameKey !== currentCounty) { currentCounty = nameKey; continue; }
-    const city = cities.get(nameKey);
-    if (city && key(city.county) === currentCounty && Number(values.C) > 0) city.population = Number(values.C);
+    if (!nameKey || nameKey === 'STATECOUNTYCITY') continue;
+    // The statewide total precedes every county section. Once a county is open,
+    // "California" is California City in Kern County.
+    if (nameKey === 'CALIFORNIA' && !currentCounty) continue;
+    const population = Number(values.C);
+    const cityOfOpenCounty = cityKeysByCounty.get(currentCounty)?.has(populationAliases[nameKey] || nameKey);
+    if (countyKeys.has(nameKey) && !cityOfOpenCounty) {
+      currentCounty = nameKey;
+      if (consolidatedCityCounties.has(nameKey) && population > 0) {
+        const consolidated = lookupCity(nameKey);
+        if (consolidated) consolidated.population = population;
+      }
+      continue;
+    }
+    const city = lookupCity(nameKey);
+    if (city && key(city.county) === currentCounty && population > 0) city.population = population;
   }
+  const unmatched = uniqueCities.filter((city) => !city.population);
+  if (unmatched.length) process.stdout.write(`Population unmatched for ${unmatched.length} cities: ${unmatched.map((city) => `${city.name} (${city.county})`).join(', ')}\n`);
 }
 
 function pointInRing([x, y], ring) {
@@ -153,14 +194,23 @@ async function zipEntries() {
 
 function inferDataThrough(entries) {
   const months = { Jan: 0, Feb: 1, Mar: 2, Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8, Oct: 9, Nov: 10, Dec: 11 };
-  const dates = entries.flatMap((entry) => [...entry.matchAll(/-([A-Z][a-z]{2})(20\d{2})/g)].map((match) => new Date(Date.UTC(Number(match[2]), months[match[1]] + 1, 0))));
-  const latest = new Date(Math.max(...dates.map(Number)));
-  return Number.isFinite(Number(latest)) ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(latest) : 'Unknown release';
+  // A three-letter token that is not a month yields NaN, and one NaN in the set
+  // makes Math.max NaN — discarding every valid date. Filter before reducing.
+  const dates = entries
+    .flatMap((entry) => [...entry.matchAll(/-([A-Z][a-z]{2})(20\d{2})/g)])
+    .filter((match) => match[1] in months)
+    .map((match) => Date.UTC(Number(match[2]), months[match[1]] + 1, 0))
+    .filter(Number.isFinite);
+  if (!dates.length) return 'Unknown release';
+  return new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(Math.max(...dates)));
 }
 
 async function aggregateEntry(entry, cities) {
-  const process = spawn('unzip', ['-p', sources.projects, entry]);
-  const lines = createInterface({ input: process.stdout, crlfDelay: Infinity });
+  // Named `child` rather than `process` so the Node global stays reachable.
+  const child = spawn('unzip', ['-p', sources.projects, entry]);
+  let spawnError = null;
+  child.once('error', (error) => { spawnError = error; });
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
   let indexes;
   for await (const line of lines) {
     if (!indexes) {
@@ -192,7 +242,8 @@ async function aggregateEntry(entry, cities) {
     annual.projects += 1;
     city.byYear.set(year, annual);
   }
-  const status = await new Promise((done) => process.on('close', done));
+  const status = await new Promise((done) => child.on('close', done));
+  if (spawnError) throw new Error(`Could not run unzip for ${entry}: ${spawnError.message}`);
   if (status !== 0) throw new Error(`Could not read ${entry}`);
 }
 
@@ -209,11 +260,37 @@ for (const entry of entries) {
 }
 
 const municipalKeys = new Set(coverageRegistry.partialCities.map(key));
+
+// Coverage is a property of the wires, not of the retail generation provider.
+// A city served by a community choice aggregator still sits on the incumbent
+// investor-owned distribution system, so its projects are fully reported here;
+// only a publicly owned utility that owns its own wires creates a gap.
+function buildCoverage(city) {
+  const cityKey = key(city.name);
+  if (!municipalKeys.has(cityKey)) {
+    return {
+      status: city.projects ? 'reported' : 'unverified',
+      note: city.projects ? coverageRegistry.defaultReportedNote : coverageRegistry.defaultUnverifiedNote
+    };
+  }
+  const coverage = { status: 'partial', note: coverageRegistry.notes[cityKey] || coverageRegistry.defaultPartialNote };
+  const utilityCode = coverageRegistry.wiresUtility?.[cityKey];
+  const utility = utilityCode ? coverageRegistry.utilities?.[utilityCode] : null;
+  if (utility) {
+    coverage.wiresUtility = utilityCode;
+    coverage.excludedUtility = { name: utility.name, kind: utility.kind, hostingCapacityUrl: utility.hostingCapacityUrl };
+  }
+  const bound = coverageRegistry.independentBounds?.[cityKey];
+  // Refuse an unsourced bound outright rather than publishing a bare number.
+  if (bound && Number.isFinite(bound.capacityMw) && bound.sourceUrl && bound.sourceName && bound.scope) coverage.bound = bound;
+  else if (bound) throw new Error(`independentBounds.${cityKey} needs capacityMw, scope, sourceName, and sourceUrl`);
+  return coverage;
+}
 const records = [...uniqueCities.values()].map((city) => {
   let cumulativeKw = 0;
   let effectiveKw = 0;
   const timeline = [];
-  for (let year = 2001; year <= currentYear; year += 1) {
+  for (let year = timelineStartYear; year <= currentYear; year += 1) {
     const annual = city.byYear.get(year) || { kw: 0, projects: 0 };
     cumulativeKw += annual.kw;
     effectiveKw += annual.kw * (0.995 ** Math.max(0, currentYear - year));
@@ -236,7 +313,7 @@ const records = [...uniqueCities.values()].map((city) => {
     geoid: city.geoid,
     coordinates: city.coordinates || null,
     population,
-    populationYear: population ? 2026 : null,
+    populationYear: population ? populationYear : null,
     capacityMw,
     effectiveCapacityMw: Number((effectiveKw / 1000).toFixed(3)),
     degradationRatePct: 0.5,
@@ -253,9 +330,7 @@ const records = [...uniqueCities.values()].map((city) => {
     sectors,
     timeline,
     timelineQuality: 'approval-date proxy',
-    coverage: municipalKeys.has(key(city.name))
-      ? { status: 'partial', note: coverageRegistry.notes[key(city.name)] || coverageRegistry.defaultPartialNote }
-      : { status: city.projects ? 'reported' : 'unverified', note: city.projects ? coverageRegistry.defaultReportedNote : coverageRegistry.defaultUnverifiedNote }
+    coverage: buildCoverage(city)
   };
   if (loadRegistry[key(city.name)]) record.load = loadRegistry[key(city.name)];
   return record;
@@ -265,6 +340,9 @@ const payload = {
   meta: {
     schemaVersion: 2,
     cityCount: records.length,
+    timelineStartYear,
+    timelineEndYear: currentYear,
+    populationYear,
     totalCapacityMw: Number(records.reduce((sum, city) => sum + city.capacityMw, 0).toFixed(3)),
     populationCoverage: records.filter((city) => city.population).length,
     coordinateCoverage: records.filter((city) => city.coordinates).length,
@@ -274,7 +352,7 @@ const payload = {
     generationYield: { method: 'CEC climate-zone fleet bands', low: 1250, high: 1750, degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
     sources: [
       { name: 'California Distributed Generation Statistics', role: 'Interconnected project sites', url: 'https://www.californiadgstats.ca.gov/downloads/' },
-      { name: 'California Department of Finance E-1', role: '2026 city population estimates', url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
+      { name: 'California Department of Finance E-1', role: `${populationYear} city population estimates`, url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
       { name: 'U.S. Census Gazetteer', role: 'City representative coordinates', url: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.2024.html' },
       { name: 'California Energy Commission', role: 'Building climate-zone polygons', url: 'https://www.energy.ca.gov/files/building-climate-zones-map' }
     ]

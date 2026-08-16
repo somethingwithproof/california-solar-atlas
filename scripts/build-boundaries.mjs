@@ -17,7 +17,11 @@ function distanceToSegment(point, start, end) {
   return Math.hypot(point[0] - (start[0] + amount * dx), point[1] - (start[1] + amount * dy));
 }
 
-function simplify(points, tolerance = .03) {
+// Tolerance is in projected viewBox pixels, so simplification behaves the same
+// whether the source arrives in degrees (EPSG:4326) or metres (EPSG:3310).
+// Applied to raw source coordinates it would be 3cm in one CRS and 3km in the
+// other, silently turning into either a no-op or a shredder.
+function simplify(points, tolerance = .35) {
   if (points.length <= 4) return points;
   let maxDistance = 0; let split = 0;
   for (let index = 1; index < points.length - 1; index += 1) {
@@ -52,7 +56,7 @@ function project(coordinate) {
   return [(longitude + 125) / 11 * 520, (42.2 - latitude) / 10.2 * 650];
 }
 function ringPath(ring) {
-  const points = simplifyRing(ring).map(project);
+  const points = simplifyRing(ring.map(project));
   if (points.length < 3) return '';
   return `${points.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('')}Z`;
 }

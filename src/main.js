@@ -12,6 +12,7 @@ const slugify = (value) => value.toLowerCase().replace(/[^a-z0-9]+/g, '-').repla
 const generationMid = (city) => (city.generationGwh.low + city.generationGwh.high) / 2;
 const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ? generationMid(city) / (deliveries + generationMid(city)) * 100 : null;
 const coverageLabel = (status) => ({ reported: 'IOU records found', partial: 'Partial utility coverage', unverified: 'Coverage unverified' })[status] || status;
+const zoneLabel = (city) => (city.climateZone ? `Zone ${city.climateZone}` : 'No assigned CEC zone');
 const metricConfig = {
   wattsPerPerson: { label: 'Watts per resident', short: 'W/person', value: (city) => city.wattsPerPerson, display: (value) => `${format.format(value)} W` },
   capacityMw: { label: 'Reported capacity', short: 'MW-DC', value: (city) => city.capacityMw, display: (value) => `${format.format(value)} MW` },
@@ -34,7 +35,7 @@ function shell(meta) {
         <p class="hero-copy">Search every incorporated California city. Compare reported capacity, climate-adjusted generation, growth, storage, and data confidence without filling gaps with county estimates.</p>
         <div class="search-wrap" data-search="primary">
           <label for="city-search">Find a California city</label>
-          <div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="city-search" type="search" autocomplete="off" placeholder="Try Chula Vista, Fresno, or Eureka" aria-controls="search-results" aria-expanded="false"><kbd>⌘ K</kbd></div>
+          <div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="city-search" type="search" autocomplete="off" placeholder="Try Chula Vista, Fresno, or Eureka" role="combobox" aria-autocomplete="list" aria-controls="search-results" aria-expanded="false"><kbd>⌘ K</kbd></div>
           <div id="search-results" class="search-results" role="listbox" hidden></div>
         </div>
         <div class="hero-meta"><span><strong>${integer.format(meta.cityCount)}</strong> incorporated cities</span><span><strong>${format.format(meta.totalCapacityMw / 1000)} GW</strong> reported in source</span><span>Data through <strong>${escapeHtml(meta.dataThrough)}</strong></span></div>
@@ -52,7 +53,7 @@ function shell(meta) {
       </section>
       <section id="compare" class="compare section-pad">
         <div class="section-heading"><div><div class="eyebrow"><span></span> Side by side</div><h2>Compare cities.</h2></div><p>Add up to four cities. Every comparison keeps the same capacity basis, degradation assumption, and location-specific yield method.</p></div>
-        <div class="compare-search search-wrap" data-search="compare"><label for="compare-search">Add a city</label><div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="compare-search" type="search" autocomplete="off" placeholder="Search to add a city" aria-controls="compare-results" aria-expanded="false"><span class="compare-count">0 / 4</span></div><div id="compare-results" class="search-results" role="listbox" hidden></div></div>
+        <div class="compare-search search-wrap" data-search="compare"><label for="compare-search">Add a city</label><div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="compare-search" type="search" autocomplete="off" placeholder="Search to add a city" role="combobox" aria-autocomplete="list" aria-controls="compare-results" aria-expanded="false"><span class="compare-count">0 / 4</span></div><div id="compare-results" class="search-results" role="listbox" hidden></div></div>
         <div id="compare-view"></div>
       </section>
       <section class="method section-pad" id="methodology">
@@ -65,7 +66,7 @@ function shell(meta) {
         </div>
         <p class="formula"><span>Solar share</span> = degradation-adjusted gross generation ÷ (grid deliveries + degradation-adjusted gross generation)</p>
       </section>
-      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${meta.sources.map((source) => `<a href="${source.url}" target="_blank" rel="noreferrer"><span>${escapeHtml(source.role)}</span><strong>${escapeHtml(source.name)}</strong><b>↗</b></a>`).join('')}</div></section>
+      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${meta.sources.map((source) => `<a href="${escapeHtml(source.url)}" target="_blank" rel="noreferrer"><span>${escapeHtml(source.role)}</span><strong>${escapeHtml(source.name)}</strong><b>↗</b></a>`).join('')}</div></section>
     </main>
     <footer><div><strong>California Solar Atlas</strong><span>Open data · Open methodology · MIT licensed</span></div><div class="footer-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer">GitHub <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer">Report an issue <b aria-hidden="true">↗</b></a><button type="button" data-action="limits">Data limitations</button></div></footer>
     ${limitsDialog()}
@@ -80,7 +81,8 @@ function limitsDialog() {
   return `<dialog class="limits-dialog" aria-labelledby="limits-title"><form method="dialog"><button class="dialog-close" aria-label="Close data limitations">×</button></form><div class="eyebrow"><span></span> Data limitations</div><h2 id="limits-title">What this data can—and cannot—tell you.</h2><div class="limits-list">
     <article><b>Reported capacity is not production.</b><p>DC nameplate comes from interconnected project records. Generation uses a CEC climate-zone fleet range and 0.5% annual degradation, not production meters.</p></article>
     <article><b>Service city is mailing geography.</b><p>The May 2026 public Project Sites files contain city and ZIP but no project coordinates or street addresses. Totals cannot yet be spatially joined to municipal polygons and may include an unincorporated mailing shadow.</p></article>
-    <article><b>Utility coverage varies.</b><p>Source files cover PG&amp;E, SCE, and SDG&amp;E. LADWP, SMUD, and other public utilities are absent, so affected city totals are explicitly marked as partial lower bounds.</p></article>
+    <article><b>Utility coverage varies.</b><p>Source files cover PG&amp;E, SCE, and SDG&amp;E. LADWP, SMUD, and other publicly owned utilities are absent, so affected city totals are explicitly marked as partial lower bounds.</p></article>
+    <article><b>Coverage follows the wires, not the bill.</b><p>What determines coverage is who owns the distribution system, because that is who files the interconnection record. A community choice aggregator such as Ava or MCE sells the electricity but does not own the wires, so cities it serves sit on PG&amp;E's distribution system and are fully represented here. Only publicly owned utilities that own their own wires create a gap.</p></article>
     <article><b>Historical growth is a proxy.</b><p>The chart groups currently listed projects by approval date. A superseding application can inherit a later date, so the series is not a frozen historical inventory.</p></article>
     <article><b>City electricity use is scarce.</b><p>A solar-share percentage appears only where a documented local load source is onboarded. County consumption is never substituted.</p></article>
     <article><b>The inventory has opposing errors.</b><p>Behind-the-fence systems can be absent while incomplete decommissioning can leave retired systems listed. Treat capacity as a reported inventory, not an audited physical census.</p></article>
@@ -90,28 +92,59 @@ function limitsDialog() {
 function setupSearch(root, mode) {
   const input = root.querySelector('input');
   const results = root.querySelector('.search-results');
+  const optionId = (index) => `${results.id}-option-${index}`;
   let active = -1;
+  const collapse = () => {
+    active = -1;
+    results.hidden = true;
+    input.setAttribute('aria-expanded', 'false');
+    input.removeAttribute('aria-activedescendant');
+  };
   const show = () => {
     const query = input.value.trim().toLowerCase();
     const matches = state.data.cities.filter((city) => `${city.name} ${city.county}`.toLowerCase().includes(query) && (mode !== 'compare' || !state.compare.includes(city))).slice(0, 8);
-    results.innerHTML = matches.map((city, index) => `<button type="button" role="option" data-geoid="${city.geoid}" aria-selected="${index === active}"><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County · ${coverageLabel(city.coverage.status)}</small></span><span class="result-value">${format.format(city.capacityMw)} MW</span></button>`).join('');
+    if (active >= matches.length) active = matches.length - 1;
+    results.innerHTML = matches.map((city, index) => `<button type="button" role="option" id="${optionId(index)}" data-geoid="${city.geoid}" aria-selected="${index === active}"><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County · ${coverageLabel(city.coverage.status)}</small></span><span class="result-value">${format.format(city.capacityMw)} MW</span></button>`).join('');
     results.hidden = !matches.length;
     input.setAttribute('aria-expanded', String(matches.length > 0));
+    // Focus stays in the textbox, so the active option has to be announced
+    // through aria-activedescendant rather than the focus ring.
+    if (active >= 0 && matches.length) {
+      input.setAttribute('aria-activedescendant', optionId(active));
+      results.querySelector(`#${CSS.escape(optionId(active))}`)?.scrollIntoView({ block: 'nearest' });
+    } else input.removeAttribute('aria-activedescendant');
   };
   input.addEventListener('input', () => { active = -1; show(); });
   input.addEventListener('focus', show);
   input.addEventListener('keydown', (event) => {
+    if (['ArrowDown', 'ArrowUp'].includes(event.key)) {
+      event.preventDefault();
+      if (results.hidden) show();
+      const count = results.querySelectorAll('button').length;
+      if (!count) return;
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      active = active < 0 ? (step === 1 ? 0 : count - 1) : (active + step + count) % count;
+      show();
+      return;
+    }
     const buttons = [...results.querySelectorAll('button')];
-    if (['ArrowDown', 'ArrowUp'].includes(event.key)) { event.preventDefault(); active = Math.max(0, Math.min(buttons.length - 1, active + (event.key === 'ArrowDown' ? 1 : -1))); show(); }
-    else if (event.key === 'Enter' && buttons.length) { event.preventDefault(); buttons[active < 0 ? 0 : active].click(); }
-    else if (event.key === 'Escape') { results.hidden = true; input.setAttribute('aria-expanded', 'false'); }
+    if (event.key === 'Enter' && buttons.length && !results.hidden) { event.preventDefault(); buttons[active < 0 ? 0 : active].click(); }
+    else if (event.key === 'Escape') {
+      // A type="search" input clears itself on Escape and fires `input`, which
+      // reopened the list the moment it was dismissed. Suppress that and follow
+      // the combobox pattern: first Escape closes, second clears.
+      event.preventDefault();
+      if (!results.hidden) collapse();
+      else if (input.value) { input.value = ''; collapse(); }
+    }
   });
   results.addEventListener('click', (event) => {
     const button = event.target.closest('[data-geoid]');
     if (!button) return;
     const city = state.data.cities.find((item) => item.geoid === button.dataset.geoid);
+    if (!city) return;
     input.value = mode === 'primary' ? city.name : '';
-    results.hidden = true;
+    collapse();
     if (mode === 'primary') selectCity(city);
     else addCompare(city);
   });
@@ -119,6 +152,18 @@ function setupSearch(root, mode) {
 
 function qualityBadge(city) {
   return `<span class="status ${city.coverage.status}"><i></i>${coverageLabel(city.coverage.status)}</span>`;
+}
+
+// Optional coverage fields. They are emitted only for cities whose distribution
+// wires belong to a utility outside the three-IOU source files, and only when a
+// sourced figure exists — the same provenance rule the load registry uses.
+function coverageDetail(city) {
+  const excluded = city.coverage.excludedUtility;
+  const bound = city.coverage.bound;
+  let detail = '';
+  if (excluded) detail += ` Distribution wires here belong to ${escapeHtml(excluded.name)}, which does not report to the CPUC${excluded.hostingCapacityUrl ? ` (<a href="${escapeHtml(excluded.hostingCapacityUrl)}" target="_blank" rel="noreferrer">its own interconnection data ↗</a>)` : ''}.`;
+  if (bound) detail += ` An independent utility-wide figure of ${format.format(bound.capacityMw)} MW-DC is published by <a href="${escapeHtml(bound.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(bound.sourceName)} ↗</a>; it covers the whole service territory, not this city alone.`;
+  return detail;
 }
 
 function sparkline(city) {
@@ -141,39 +186,48 @@ function cityCsv(city) {
 }
 
 function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
+  const previous = state.city;
   state.city = city;
   const share = solarShare(city);
   const shareLow = city.load ? city.generationGwh.low / (city.load.highDeliveriesGwh + city.generationGwh.low) * 100 : null;
   const shareHigh = city.load ? city.generationGwh.high / (city.load.lowDeliveriesGwh + city.generationGwh.high) * 100 : null;
   const view = document.querySelector('#city-view');
   view.innerHTML = `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · CEC climate zone ${city.climateZone || 'unassigned'}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}<button data-action="share">Share</button><button data-action="csv">Download CSV</button></div></div>
-    <div class="coverage-note ${city.coverage.status}"><strong>${city.coverage.status === 'partial' ? 'Treat this capacity as a lower bound.' : 'Coverage note'}</strong><span>${escapeHtml(city.coverage.note)}</span><button data-action="limits" aria-label="Read all data limitations">?</button></div>
+    <div class="coverage-note ${city.coverage.status}"><strong>${city.coverage.status === 'partial' ? 'Treat this capacity as a lower bound.' : 'Coverage note'}</strong><span>${escapeHtml(city.coverage.note)}${coverageDetail(city)}</span><button data-action="limits" aria-label="Read all data limitations">?</button></div>
     <div class="metrics four"><article><span>Reported capacity</span><strong>${format.format(city.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(city.projects)} current project sites</p></article><article><span>Climate-adjusted generation</span><strong>${format.format(city.generationGwh.low)}–${format.format(city.generationGwh.high)} <small>GWh/yr</small></strong><p>${city.yieldRange.join('–')} kWh/kW · degradation applied</p></article><article><span>Capacity per resident</span><strong>${city.wattsPerPerson == null ? 'Unavailable' : `${format.format(city.wattsPerPerson)} <small>W/person</small>`}</strong><p>${city.population ? `${integer.format(city.population)} residents · 2026 DOF` : 'Population not matched'}</p></article><article><span>Share of city electricity use</span>${share == null ? '<strong class="not-available">Not available</strong><p>No verified city load denominator</p>' : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
-    <div class="detail-grid"><article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative MW-DC by approval date</h3></div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}</article><aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${city.generationGwh.low}</b><b>${city.generationGwh.high} GWh</b></div><p>Zone ${city.climateZone} uses ${city.yieldRange[0]}–${city.yieldRange[1]} kWh/kW-DC-year. Vintage-adjusted effective capacity is ${format.format(city.effectiveCapacityMw)} MW after 0.5% annual degradation.</p></aside></div>
+    <div class="detail-grid"><article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative MW-DC by approval date</h3></div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}</article><aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${city.generationGwh.low}</b><b>${city.generationGwh.high} GWh</b></div><p>${zoneLabel(city)} uses ${city.yieldRange[0]}–${city.yieldRange[1]} kWh/kW-DC-year${city.climateZone ? '' : ', a statewide fallback band applied because no CEC zone polygon contains this city'}. Vintage-adjusted effective capacity is ${format.format(city.effectiveCapacityMw)} MW after 0.5% annual degradation.</p></aside></div>
     <div class="attributes"><article><div class="panel-head"><div><span>Customer mix</span><h3>Capacity by sector</h3></div></div>${sectorRows(city)}</article><article><div class="panel-head"><div><span>System profile</span><h3>What is connected</h3></div></div><dl><div><dt>Average system</dt><dd>${format.format(city.averageSystemKw)} kW</dd></div><div><dt>Storage-linked sites</dt><dd>${integer.format(city.storageProjects)}</dd></div><div><dt>Reported storage</dt><dd>${format.format(city.storageMwh)} MWh</dd></div><div><dt>Source utilities</dt><dd>${city.utilities.length ? city.utilities.join(', ') : 'None matched'}</dd></div></dl></article></div>
-    <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>Positive System Size DC values only; CEC-AC values are not mixed into totals.</p><span>History quality</span><p>Approval-date proxy; superseded applications can shift apparent installation timing.</p>${city.load ? `<span>Load source</span><p><a href="${city.load.sourceUrl}" target="_blank" rel="noreferrer">${escapeHtml(city.load.sourceName)} ↗</a> — ${escapeHtml(city.load.note)}</p>` : ''}</div>`;
+    <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>Positive System Size DC values only; CEC-AC values are not mixed into totals.</p><span>History quality</span><p>Approval-date proxy; superseded applications can shift apparent installation timing.</p>${city.load ? `<span>Load source</span><p><a href="${escapeHtml(city.load.sourceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(city.load.sourceName)} ↗</a> — ${escapeHtml(city.load.note)}</p>` : ''}</div>`;
   document.querySelector('#city-search').value = city.name;
   const url = new URL(location.href); url.searchParams.set('city', slugify(city.name));
-  if (historyMode === 'push') history.pushState({ city: city.geoid }, '', url);
+  // Re-selecting the city already on screen must not stack a duplicate entry,
+  // or the back button silently does nothing.
+  if (historyMode === 'push' && previous?.geoid !== city.geoid) history.pushState({ city: city.geoid }, '', url);
   else history.replaceState({ city: city.geoid }, '', url);
   if (scroll) view.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderMap() {
   const config = metricConfig[state.mapMetric];
-  const cities = state.data.cities.filter((city) => city.coordinates && Number.isFinite(config.value(city)) && config.value(city) > 0);
-  const values = cities.map(config.value);
-  const sorted = [...values].sort((a, b) => a - b);
+  const mapped = state.data.cities.filter((city) => state.boundaries[city.geoid]);
+  const comparable = (city) => Number.isFinite(config.value(city)) && config.value(city) > 0;
+  const measured = mapped.filter(comparable);
+  const sorted = measured.map(config.value).sort((a, b) => a - b);
   const cap = sorted[Math.floor(sorted.length * .95)] || 1;
-  const paths = cities.map((city) => {
-    const path = state.boundaries[city.geoid]; if (!path) return '';
-    const ratio = Math.min(config.value(city) / cap, 1); const lightness = 91 - ratio * 43;
-    return `<path class="map-city ${city.coverage.status}" style="fill:hsl(39 78% ${lightness}%)" d="${path}" data-geoid="${city.geoid}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${config.display(config.value(city))}"><title>${escapeHtml(city.name)} · ${config.display(config.value(city))} · ${coverageLabel(city.coverage.status)}</title></path>`;
+  // Every city with an official polygon is drawn. Cities without a comparable
+  // value are drawn unshaded rather than dropped, so a coverage gap reads as a
+  // gap instead of as a hole in the state.
+  const paths = mapped.map((city) => {
+    const path = state.boundaries[city.geoid];
+    const reading = comparable(city) ? config.display(config.value(city)) : `no comparable ${config.short}`;
+    const fill = comparable(city) ? ` style="fill:hsl(39 78% ${91 - Math.min(config.value(city) / cap, 1) * 43}%)"` : '';
+    return `<path class="map-city ${city.coverage.status}${comparable(city) ? '' : ' no-value'}"${fill} d="${path}" data-geoid="${city.geoid}" tabindex="0" role="button" aria-label="${escapeHtml(city.name)}: ${reading}"><title>${escapeHtml(city.name)} · ${reading} · ${coverageLabel(city.coverage.status)}</title></path>`;
   }).join('');
   document.querySelector('#solar-map').innerHTML = `<svg viewBox="0 0 520 650" role="img" aria-label="California incorporated cities shaded by ${config.label}"><path class="state-outline" d="M28 13L236 13L236 204L490 459L486 603L372 615L307 522L213 494L118 325Z"/>${paths}</svg>`;
-  const summaryCities = state.mapMetric === 'wattsPerPerson' ? cities.filter((city) => city.population >= 10_000) : cities;
+  const summaryCities = state.mapMetric === 'wattsPerPerson' ? measured.filter((city) => city.population >= 10_000) : measured;
   const top = [...summaryCities].sort((a, b) => config.value(b) - config.value(a)).slice(0, 5);
-  document.querySelector('#map-summary').innerHTML = `<span>Highest ${config.label.toLowerCase()}${state.mapMetric === 'wattsPerPerson' ? ' · population 10,000+' : ''}</span>${top.map((city, index) => `<button data-geoid="${city.geoid}"><i>${index + 1}</i><span>${escapeHtml(city.name)}<small>${escapeHtml(city.county)} County</small></span><strong>${config.display(config.value(city))}</strong></button>`).join('')}<p>Official polygons; shading uses service-city aggregates. Empty municipal polygons have no comparable value.</p>`;
+  const unshaded = mapped.length - measured.length;
+  document.querySelector('#map-summary').innerHTML = `<span>Highest ${config.label.toLowerCase()}${state.mapMetric === 'wattsPerPerson' ? ' · population 10,000+' : ''}</span>${top.map((city, index) => `<button data-geoid="${city.geoid}"><i>${index + 1}</i><span>${escapeHtml(city.name)}<small>${escapeHtml(city.county)} County</small></span><strong>${config.display(config.value(city))}</strong></button>`).join('')}<p>Official polygons; shading uses service-city aggregates. ${integer.format(unshaded)} of ${integer.format(mapped.length)} cities are drawn unshaded because they have no comparable ${escapeHtml(config.short)} value.</p>`;
 }
 
 function renderRankings() {
@@ -181,6 +235,10 @@ function renderRankings() {
   const excludePartial = document.querySelector('#exclude-partial')?.checked;
   const minimumPopulation = document.querySelector('#minimum-population')?.checked;
   const ranked = state.data.cities.filter((city) => Number.isFinite(config.value(city)) && (!excludePartial || city.coverage.status !== 'partial') && (!minimumPopulation || city.population >= 10_000)).sort((a, b) => config.value(b) - config.value(a)).slice(0, 20);
+  if (!ranked.length) {
+    document.querySelector('#ranking-table').innerHTML = '<div class="compare-empty">No cities have a comparable value for this metric under the current filters.</div>';
+    return;
+  }
   const max = config.value(ranked[0]) || 1;
   document.querySelector('#ranking-table').innerHTML = `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${ranked.map((city, index) => `<button data-geoid="${city.geoid}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><i style="width:${config.value(city) / max * 100}%"></i><b>${config.display(config.value(city))}</b></span>${qualityBadge(city)}</button>`).join('')}`;
 }
@@ -198,7 +256,34 @@ function renderCompare() {
 }
 
 function download(name, content, type = 'text/csv') {
-  const anchor = document.createElement('a'); anchor.href = URL.createObjectURL(new Blob([content], { type })); anchor.download = name; anchor.click(); URL.revokeObjectURL(anchor.href);
+  const url = URL.createObjectURL(new Blob([content], { type }));
+  const anchor = document.createElement('a');
+  anchor.href = url; anchor.download = name; anchor.rel = 'noopener';
+  // Firefox and Safari need the anchor in the document, and revoking the object
+  // URL in the same tick can cancel the transfer before it starts.
+  document.body.append(anchor); anchor.click(); anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+// The chart is styled entirely by stylesheet rules, so an exported copy has to
+// carry its own presentation attributes or it renders as black shapes.
+function exportableChart(city) {
+  const chart = document.querySelector('.trend-panel .chart').cloneNode(true);
+  chart.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  chart.removeAttribute('class');
+  const area = chart.querySelector('.area');
+  if (area) { area.setAttribute('fill', 'url(#sun-fill)'); area.removeAttribute('class'); }
+  const line = chart.querySelector('.line');
+  if (line) {
+    line.setAttribute('fill', 'none');
+    line.setAttribute('stroke', '#eaa72c');
+    line.setAttribute('stroke-width', '3');
+    line.setAttribute('stroke-linejoin', 'round');
+    line.setAttribute('stroke-linecap', 'round');
+    line.removeAttribute('class');
+  }
+  chart.insertAdjacentHTML('afterbegin', `<title>${escapeHtml(city.name)} reported solar capacity by approval year</title><rect width="100%" height="100%" fill="#17372f"/>`);
+  return new XMLSerializer().serializeToString(chart);
 }
 
 function toast(message) {
@@ -212,15 +297,12 @@ function bindEvents() {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'limits') document.querySelector('.limits-dialog').showModal();
     if (action === 'csv') download(`${slugify(state.city.name)}-solar-data.csv`, cityCsv(state.city));
-    if (action === 'chart') {
-      const chart = document.querySelector('.trend-panel .chart').cloneNode(true);
-      chart.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-      chart.insertAdjacentHTML('afterbegin', `<title>${escapeHtml(state.city.name)} reported solar capacity by approval year</title><rect width="100%" height="100%" fill="#17372f"/>`);
-      download(`${slugify(state.city.name)}-capacity-history.svg`, new XMLSerializer().serializeToString(chart), 'image/svg+xml');
-    }
+    if (action === 'chart') download(`${slugify(state.city.name)}-capacity-history.svg`, exportableChart(state.city), 'image/svg+xml');
     if (action === 'share') {
       const payload = { title: `${state.city.name} solar data`, text: `Explore reported distributed solar in ${state.city.name}, California.`, url: location.href };
-      if (navigator.share) await navigator.share(payload).catch(() => {}); else { await navigator.clipboard.writeText(location.href); toast('City link copied'); }
+      if (navigator.share) await navigator.share(payload).catch(() => {});
+      else if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(location.href).then(() => toast('City link copied')).catch(() => toast('Could not copy the link'));
+      else toast('Copy the address bar to share this city');
     }
     const target = event.target.closest('[data-geoid]');
     if (target && !target.closest('.search-results')) { const city = state.data.cities.find((item) => item.geoid === target.dataset.geoid); if (city) selectCity(city); }
@@ -233,6 +315,16 @@ function bindEvents() {
   document.querySelector('#exclude-partial').addEventListener('change', renderRankings);
   document.querySelector('#minimum-population').addEventListener('change', renderRankings);
   document.addEventListener('keydown', (event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); document.querySelector('#city-search').focus(); } });
+  // Map polygons are <path role="button" tabindex="0">. Unlike a real button they
+  // do not synthesise a click from Enter or Space, so selection needs wiring.
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const target = event.target.closest?.('path[data-geoid]');
+    if (!target) return;
+    event.preventDefault();
+    const city = state.data.cities.find((item) => item.geoid === target.dataset.geoid);
+    if (city) selectCity(city);
+  });
   document.addEventListener('click', (event) => { if (!event.target.closest('.search-wrap')) document.querySelectorAll('.search-results').forEach((result) => { result.hidden = true; }); });
   addEventListener('popstate', () => { const requested = new URL(location.href).searchParams.get('city'); const city = state.data.cities.find((item) => slugify(item.name) === requested); if (city) selectCity(city, { scroll: false, historyMode: 'replace' }); });
 }
