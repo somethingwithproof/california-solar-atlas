@@ -41,6 +41,15 @@ CA_CITY_GEOJSON=/path/to/city-boundaries.geojson npm run data:boundaries
 
 The scripts keep the large raw files outside the repository and emit compact city and boundary files suitable for GitHub Pages.
 
+Build the Parquet release assets from the browser JSON with:
+
+```bash
+python scripts/export-parquet.py            # writes dist-data/
+python scripts/export-parquet.py --replace  # overwrites a previous release
+```
+
+`--replace` only removes a `dist-data/` that carries a `metadata.json` from an earlier export.
+
 ## Methodology
 
 - Capacity is the sum of positive `System Size DC` values for records whose technology includes photovoltaic, grouped by the utility-reported `Service City`.

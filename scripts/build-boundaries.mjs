@@ -9,7 +9,8 @@ const output = resolve(projectRoot, 'public/data/boundaries.json');
 const source = JSON.parse(readFileSync(input, 'utf8'));
 const sourceCrs = source.crs?.properties?.name || 'EPSG:4326';
 if (!Array.isArray(source.features) || !source.features.length) throw new Error('Boundary source has no features');
-if (!sourceCrs.includes('3310') && !sourceCrs.includes('4326')) throw new Error(`Unsupported boundary CRS: ${sourceCrs}`);
+// CRS84 is the spec-canonical WGS84 name and is common in OGC and ArcGIS exports.
+if (!/3310|4326|CRS84/i.test(sourceCrs)) throw new Error(`Unsupported boundary CRS: ${sourceCrs}`);
 proj4.defs('EPSG:3310', '+proj=aea +lat_0=0 +lon_0=-120 +lat_1=34 +lat_2=40.5 +x_0=0 +y_0=-4000000 +datum=NAD83 +units=m +no_defs');
 
 function distanceToSegment(point, start, end) {

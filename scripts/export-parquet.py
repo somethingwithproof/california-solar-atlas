@@ -3,9 +3,13 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import os
+import sys
 import json
 import math
+import shutil
 import tempfile
 from decimal import Decimal
 from pathlib import Path
@@ -22,6 +26,9 @@ INT64_MAX = 2**63 - 1
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CANONICAL_INPUT = PROJECT_ROOT / "public" / "data" / "cities.json"
 CANONICAL_OUTPUT = PROJECT_ROOT / "dist-data"
+RELEASE_MARKER = "metadata.json"
+SOURCE_ASSET = "california-solar-atlas.json"
+CHECKSUM_MANIFEST = "SHA256SUMS"
 
 
 def finite_number(value: object) -> bool:
@@ -242,7 +249,7 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
 
     # The destination is a fixed staging directory and the filename is a literal;
     # validated source bytes cannot influence either path.
-    (destination / "california-solar-atlas.json").write_bytes(source_bytes)  # NOSONAR
+    (destination / SOURCE_ASSET).write_bytes(source_bytes)  # NOSONAR
     metadata = {
         "schemaVersion": payload["meta"]["schemaVersion"],
         "dataThrough": payload["meta"]["dataThrough"],
@@ -255,23 +262,41 @@ def build_assets(payload: dict[str, Any], source_bytes: bytes, destination: Path
         "countyRows": len(county_rows),
         "cityTimelineRows": len(city_timeline),
         "countyTimelineRows": len(county_timeline),
-        "sourceFile": "california-solar-atlas.json",
+        "sourceFile": SOURCE_ASSET,
         "sourceSha256": hashlib.sha256(source_bytes).hexdigest(),
     }
     # Metadata values affect file contents only; the release path is fixed above.
-    (destination / "metadata.json").write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8")  # NOSONAR
+    (destination / RELEASE_MARKER).write_text(json.dumps(metadata, indent=2, allow_nan=False) + "\n", encoding="utf-8")  # NOSONAR
 
     checksum_lines = [
         f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}"
         for path in sorted(destination.iterdir())
-        if path.name != "SHA256SUMS"
+        if path.name != CHECKSUM_MANIFEST
     ]
-    (destination / "SHA256SUMS").write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
+    (destination / CHECKSUM_MANIFEST).write_text("\n".join(checksum_lines) + "\n", encoding="utf-8")
     for asset in destination.iterdir():
         asset.chmod(0o644)
 
 
-def prepare_output(output: Path) -> None:
+def is_previous_release(output: Path) -> bool:
+    """Recognize only a directory this exporter wrote, by its full asset manifest.
+
+    A stray metadata.json is not proof of ownership, and --replace deletes recursively.
+    """
+    if not (output / CHECKSUM_MANIFEST).is_file():
+        return False
+    try:
+        metadata = json.loads((output / RELEASE_MARKER).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(metadata, dict) or metadata.get("sourceFile") != SOURCE_ASSET:
+        return False
+    expected = {SOURCE_ASSET, RELEASE_MARKER, CHECKSUM_MANIFEST, "cities.parquet",
+                "counties.parquet", "city-timeline.parquet", "county-timeline.parquet"}
+    return expected.issubset({entry.name for entry in output.iterdir()})
+
+
+def prepare_output(output: Path, *, replace: bool = False) -> None:
     """Require an absent or empty directory and prepare for an atomic rename."""
     output.parent.mkdir(parents=True, exist_ok=True)
     if not output.exists():
@@ -279,14 +304,21 @@ def prepare_output(output: Path) -> None:
     if not output.is_dir():
         raise RuntimeError(f"Output path exists and is not a directory: {output}")
     if any(output.iterdir()):
-        raise RuntimeError(f"Output directory is not empty: {output}")
+        if not replace:
+            raise RuntimeError(f"Output directory is not empty: {output} (pass --replace to overwrite a previous release)")
+        # Only a directory this exporter wrote may be replaced; the marker keeps
+        # --replace from touching an unrelated path someone pointed the run at.
+        if not is_previous_release(output):
+            raise RuntimeError(f"Refusing to replace {output}: it does not carry a complete release manifest from this exporter")
+        # The existing release stays on disk until the new one is built.
+        return
     try:
         output.rmdir()
     except OSError as error:
         raise RuntimeError(f"Could not prepare output directory {output}: {error}") from error
 
 
-def run(input_path: Path, output_path: Path) -> None:
+def run(input_path: Path, output_path: Path, *, replace: bool = False) -> None:
     """Run a transactional export and present source errors without a traceback."""
     input_size = input_path.stat().st_size
     if input_size <= 0 or input_size > MAX_INPUT_BYTES:
@@ -295,19 +327,39 @@ def run(input_path: Path, output_path: Path) -> None:
     payload = validate_payload(
         json.loads(source_bytes, parse_constant=reject_nonfinite_json, parse_float=parse_json_float)
     )
-    prepare_output(output_path)
+    prepare_output(output_path, replace=replace)
 
     # Keeping staging under the output parent makes the final rename atomic on one filesystem.
     with tempfile.TemporaryDirectory(prefix=".atlas-release-", dir=output_path.parent) as temporary:
         staging = Path(temporary)
         build_assets(payload, source_bytes, staging)
         staging.chmod(0o755)
-        staging.replace(output_path)
+        if not output_path.exists():
+            staging.replace(output_path)
+            return
+        # Build first, then swap, then discard. A failure above leaves the previous
+        # release untouched rather than deleting it and then failing.
+        retired = output_path.with_name(f"{output_path.name}.retired-{os.getpid()}")
+        output_path.replace(retired)
+        try:
+            staging.replace(output_path)
+        except BaseException:
+            retired.replace(output_path)
+            raise
+        # The swap already succeeded, so a cleanup failure must not fail the export,
+        # but it must not be silent either: the leftover needs removing by hand.
+        try:
+            shutil.rmtree(retired)
+        except OSError as error:
+            sys.stderr.write(f"Warning: could not remove the retired release {retired}: {error}\n")
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--replace", action="store_true", help="overwrite a previous release in the output directory")
+    options = parser.parse_args()
     try:
-        run(CANONICAL_INPUT, CANONICAL_OUTPUT)
+        run(CANONICAL_INPUT, CANONICAL_OUTPUT, replace=options.replace)
     except (OSError, OverflowError, RuntimeError, TypeError, ValueError) as error:
         raise SystemExit(f"Release export failed: {error}") from error
 

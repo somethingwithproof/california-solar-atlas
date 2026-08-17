@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
+import { pouByCity, applyPouCapacity, trimStateSuffix } from './pou-attribution.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const unzipCommand = '/usr/bin/unzip';
@@ -17,6 +18,8 @@ const output = resolve(projectRoot, 'public/data/cities.json');
 const loadRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/load-sources.json'), 'utf8'));
 const coverageRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/utility-coverage.json'), 'utf8'));
 const cecCountyBenchmark = JSON.parse(readFileSync(resolve(projectRoot, 'data/cec-county-solar-2024.json'), 'utf8'));
+const pouInputs = JSON.parse(readFileSync(resolve(projectRoot, 'data/pou-inputs.json'), 'utf8'));
+const pouAttribution = JSON.parse(readFileSync(resolve(projectRoot, 'data/pou-attribution.json'), 'utf8'));
 let dataThrough = process.env.DATA_THROUGH || '';
 const currentYear = Number(process.env.DATA_YEAR || 2026);
 const countyNames = new Map();
@@ -182,7 +185,7 @@ function addClimateZones(cities) {
       city.climateZoneMethod = 'reviewed-override';
       continue;
     }
-    if (!city.coordinates) continue;
+    if (!city.coordinates) { city.climateZone = null; city.climateZoneMethod = 'unassigned'; continue; }
     const feature = zones.find(({ geometry }) => {
       const polygons = geometry.type === 'Polygon' ? [geometry.coordinates] : geometry.coordinates;
       return polygons.some((polygon) => pointInPolygon(city.coordinates, polygon));
@@ -209,6 +212,7 @@ function addClimateZones(cities) {
 
 // Fleet-average DC yields by CEC climate zone. These deliberately span mixed
 // orientations and shading rather than representing an optimally tilted array.
+const statewideYield = [1250, 1750];
 const climateYields = {
   1: [1250, 1350], 2: [1350, 1450], 3: [1350, 1450], 4: [1400, 1500],
   5: [1400, 1500], 6: [1450, 1550], 7: [1500, 1600], 8: [1500, 1600],
@@ -293,7 +297,13 @@ async function aggregateEntry(entry, cities, counties, dropped) {
     const year = parsedYear == null || parsedYear > currentYear ? null : Math.max(2001, parsedYear);
     const project = { capacityKw, sector, storageRaw, utility: row[indexes.utility], year };
     const county = counties.get(key(row[indexes.county]));
-    if (!county) throw new Error(`${entry}: unknown Service County ${row[indexes.county] || '(blank)'}`);
+    if (!county) {
+      // Drop the row from both aggregates so county and city subtotals stay reconcilable.
+      dropped.countyProjects += 1;
+      dropped.countyCapacityKw += capacityKw;
+      dropped.serviceCounties.add((row[indexes.county] || 'blank').trim() || 'blank');
+      continue;
+    }
     addProject(county, project);
     const city = cities.get(cityKey(row[indexes.city]));
     if (city) addProject(city, project);
@@ -310,15 +320,29 @@ async function aggregateEntry(entry, cities, counties, dropped) {
 const cities = officialCities();
 addGazetteer(cities);
 addPopulation(cities);
+// Separates "one bad source row" from "the DOF sheet layout moved and no county parsed".
+if (countyNames.size !== 58) throw new Error(`Parsed ${countyNames.size} of 58 counties from the population workbook`);
 addClimateZones(cities);
 const countyAggregates = new Map([...countyNames].map(([countyKey, name]) => [countyKey, emptyAggregate(name)]));
 const uniqueCities = new Map([...cities.values()].map((city) => [city.id, city]));
 const entries = await zipEntries();
 if (!dataThrough) dataThrough = inferDataThrough(entries);
-const dropped = { projects: 0, capacityKw: 0, serviceCities: new Set() };
+const UNRESOLVED_COUNTY_CEILING = 0.005;
+const dropped = { projects: 0, capacityKw: 0, serviceCities: new Set(), countyProjects: 0, countyCapacityKw: 0, serviceCounties: new Set() };
 for (const entry of entries) {
   process.stdout.write(`Aggregating ${entry}\n`);
   await aggregateEntry(entry, cities, countyAggregates, dropped);
+}
+
+// Publicly owned utility capacity is kept in its own field rather than folded into
+// capacityMw. capacityMw stays the DG Stats IOU inventory, so every county and
+// statewide reconciliation keeps comparing like with like.
+// NUL cannot appear in a utility or city name, so it cannot forge a composite key.
+const { merged: pouMerged, excluded: pouExcluded } = pouByCity(pouInputs, pouAttribution, key);
+const countedCountyKw = [...countyAggregates.values()].reduce((sum, county) => sum + county.capacityKw, 0);
+const unresolvedShare = dropped.countyCapacityKw / (countedCountyKw + dropped.countyCapacityKw || 1);
+if (unresolvedShare > UNRESOLVED_COUNTY_CEILING) {
+  throw new Error(`Unresolved Service County rows carry ${(unresolvedShare * 100).toFixed(2)}% of capacity, above the ${(UNRESOLVED_COUNTY_CEILING * 100).toFixed(2)}% ceiling: ${[...dropped.serviceCounties].join(', ')}`);
 }
 
 const municipalKeys = new Set(coverageRegistry.partialCities.map(key));
@@ -334,8 +358,9 @@ const records = [...uniqueCities.values()].map((city) => {
   }
   const capacityMw = Number((city.capacityKw / 1000).toFixed(3));
   const climateZone = city.climateZone || null;
-  const yieldRange = climateYields[climateZone];
-  if (!yieldRange) throw new Error(`${city.name}: climate zone could not be assigned`);
+  // A city the Gazetteer has not published yet (newly incorporated, usually) gets the
+  // statewide band instead of failing the refresh. climateZoneMethod discloses the fallback.
+  const yieldRange = climateYields[climateZone] || statewideYield;
   const undatedLowEffectiveKw = city.undatedKw * (0.995 ** Math.max(0, currentYear - 2001));
   const effectiveLowKw = effectiveKw + undatedLowEffectiveKw;
   const effectiveHighKw = effectiveKw + city.undatedKw;
@@ -387,8 +412,18 @@ const records = [...uniqueCities.values()].map((city) => {
       : { status: city.projects ? 'reported' : 'unverified', note: city.projects ? coverageRegistry.defaultReportedNote : coverageRegistry.defaultUnverifiedNote }
   };
   if (loadRegistry[key(city.name)]) record.load = loadRegistry[key(city.name)];
+  const pou = pouMerged.get(key(city.name));
+  if (pou) applyPouCapacity(record, pou, { capacityMw, effectiveLowKw, effectiveHighKw, yieldRange, currentYear });
   return record;
 }).sort((a, b) => a.name.localeCompare(b.name));
+
+// Compared on city keys, not utility names: two registry entries sharing an eiaName
+// would leave a name-based difference empty and report a failure naming nothing.
+const appliedCityKeys = new Set(records.filter((city) => city.pouCapacity).map((city) => key(city.name)));
+if (appliedCityKeys.size !== pouMerged.size) {
+  const stranded = [...pouMerged.entries()].filter(([cityKey]) => !appliedCityKeys.has(cityKey)).map(([, pou]) => pou.utility);
+  throw new Error(`Municipal capacity was never applied to a city record for: ${stranded.join(', ') || 'an unidentified entry; check for duplicate eiaName values'}`);
+}
 
 const counties = [...countyAggregates.values()].sort((a, b) => a.name.localeCompare(b.name)).map((county) => {
   const name = county.name;
@@ -438,7 +473,7 @@ const counties = [...countyAggregates.values()].sort((a, b) => a.name.localeComp
 
 const payload = {
   meta: {
-    schemaVersion: 7,
+    schemaVersion: 8,
     cityCount: records.length,
     totalCapacityMw: Number(records.reduce((sum, city) => sum + city.capacityMw, 0).toFixed(3)),
     sourceCapacityMw: Number(counties.reduce((sum, county) => sum + county.capacityMw, 0).toFixed(3)),
@@ -462,13 +497,45 @@ const payload = {
     unmatchedProjects: dropped.projects,
     unmatchedCapacityMw: Number((dropped.capacityKw / 1000).toFixed(3)),
     unmatchedServiceCities: dropped.serviceCities.size,
-    generationYield: { method: 'CEC climate-zone fleet bands', low: 1250, high: 1750, degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
+    unresolvedCountyProjects: dropped.countyProjects,
+    unresolvedCountyCapacityMw: Number((dropped.countyCapacityKw / 1000).toFixed(3)),
+    unresolvedServiceCounties: dropped.serviceCounties.size,
+    publicUtilityCoverage: {
+      year: pouInputs.netMetering.year,
+      mergedCities: records.filter((city) => city.pouCapacity).length,
+      mergedRangeMwDc: {
+        low: Number(records.reduce((sum, city) => sum + (city.pouCapacity?.capacityRangeMwDc.low || 0), 0).toFixed(3)),
+        high: Number(records.reduce((sum, city) => sum + (city.pouCapacity?.capacityRangeMwDc.high || 0), 0).toFixed(3))
+      },
+      unattributedUtilities: pouExcluded.length,
+      // Named from the registry so the dialog cannot keep claiming a utility is
+      // unattributed after its decision changes.
+      unattributedNames: pouExcluded
+        .slice()
+        .sort((a, b) => b.capacityRangeMwDc.low - a.capacityRangeMwDc.low)
+        .map((utility) => trimStateSuffix(utility.eiaName)),
+      // Reported values mix AC and DC filers, so the only summable form is the converted band.
+      unattributedRangeMwDc: {
+        low: Number(pouExcluded.reduce((sum, utility) => sum + utility.capacityRangeMwDc.low, 0).toFixed(3)),
+        high: Number(pouExcluded.reduce((sum, utility) => sum + utility.capacityRangeMwDc.high, 0).toFixed(3))
+      },
+      basis: 'Reported net-metered capacity; AC values converted to DC across an inverter-loading-ratio band.',
+      inverterLoadingRatio: pouAttribution.inverterLoadingRatio,
+      mergeThresholdPct: pouAttribution.mergeThresholdPct,
+      sourceName: pouInputs.netMetering.sourceName,
+      sourceUrl: pouInputs.netMetering.sourceUrl,
+      territorySourceName: pouInputs.territoryOverlap.sourceName,
+      territorySourceUrl: pouInputs.territoryOverlap.sourceUrl
+    },
+    generationYield: { method: 'CEC climate-zone fleet bands', low: statewideYield[0], high: statewideYield[1], degradationPctPerYear: 0.5, unit: 'kWh/kW-DC-year' },
     sources: [
       { name: 'California Distributed Generation Statistics', role: 'Interconnected project sites', url: 'https://www.californiadgstats.ca.gov/downloads/' },
       { name: 'California Department of Finance E-1/E-1H', role: '2026 city population and housing estimates', url: 'https://dof.ca.gov/forecasting/demographics/estimates-e1/' },
       { name: 'U.S. Census Gazetteer', role: 'City representative coordinates', url: 'https://www.census.gov/geographies/reference-files/time-series/geo/gazetteer-files.2024.html' },
       { name: 'California Energy Commission', role: 'Building climate-zone polygons', url: 'https://www.energy.ca.gov/files/building-climate-zones-map' },
-      { name: 'California Energy Commission CEC-1304B', role: '2024 all-utility county solar benchmark', url: cecCountyBenchmark.sourceUrl }
+      { name: 'California Energy Commission CEC-1304B', role: '2024 all-utility county solar benchmark', url: cecCountyBenchmark.sourceUrl },
+      { name: pouInputs.netMetering.sourceName, role: `${pouInputs.netMetering.year} municipal utility net-metered capacity`, url: pouInputs.netMetering.sourceUrl },
+      { name: pouInputs.territoryOverlap.sourceName, role: 'Utility service territory polygons for city attribution', url: pouInputs.territoryOverlap.sourceUrl }
     ]
   },
   cities: records,

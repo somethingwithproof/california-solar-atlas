@@ -4,3 +4,6 @@ dist-data/
 .atlas-release-*
 .DS_Store
 *.zip
+__pycache__/
+.pou-cache/
+dist-data.retired-*
