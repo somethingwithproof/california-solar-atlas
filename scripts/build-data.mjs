@@ -3,16 +3,17 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
+import { requiredSourcePath } from './source-path.mjs';
 import { pouByCity, applyPouCapacity, trimStateSuffix } from './pou-attribution.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
 const unzipCommand = '/usr/bin/unzip';
 const sources = {
-  cities: resolve(process.env.CA_CITY_CSV || '/tmp/ca-cities.csv'),
-  projects: resolve(process.env.CA_DG_ZIP || '/tmp/ca-dg-projects.zip'),
-  population: resolve(process.env.CA_POPULATION_XLSX || '/tmp/ca-population-2026.xlsx'),
-  gazetteer: resolve(process.env.CA_GAZETTEER || '/tmp/ca-place-gazetteer.txt'),
-  climateZones: resolve(process.env.CA_CLIMATE_ZONES || '/tmp/ca-climate-zones.geojson')
+  cities: requiredSourcePath('CA_CITY_CSV'),
+  projects: requiredSourcePath('CA_DG_ZIP'),
+  population: requiredSourcePath('CA_POPULATION_XLSX'),
+  gazetteer: requiredSourcePath('CA_GAZETTEER'),
+  climateZones: requiredSourcePath('CA_CLIMATE_ZONES')
 };
 const output = resolve(projectRoot, 'public/data/cities.json');
 const loadRegistry = JSON.parse(readFileSync(resolve(projectRoot, 'data/load-sources.json'), 'utf8'));
@@ -24,8 +25,27 @@ let dataThrough = process.env.DATA_THROUGH || '';
 const currentYear = Number(process.env.DATA_YEAR || 2026);
 const countyNames = new Map();
 
+function stripXmlTags(value) {
+  let result = '';
+  let cursor = 0;
+  while (cursor < value.length) {
+    const start = value.indexOf('<', cursor);
+    if (start < 0) return result + value.slice(cursor);
+    const end = value.indexOf('>', start + 1);
+    if (end < 0) return result + value.slice(cursor);
+    if (end === start + 1) {
+      result += value.slice(cursor, end + 1);
+      cursor = end + 1;
+      continue;
+    }
+    result += value.slice(cursor, start);
+    cursor = end + 1;
+  }
+  return result;
+}
+
 function decodeXml(value = '') {
-  return value.replace(/<[^>]+>/g, '').replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
+  return stripXmlTags(value).replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
 }
 
 function parseCsv(line) {
@@ -113,43 +133,60 @@ function addGazetteer(cities) {
   }
 }
 
+function worksheetRow(xml, strings) {
+  const values = {};
+  for (const cell of xml.match(/<c[\s>][\s\S]*?<\/c>/g) || []) {
+    const column = cell.match(/ r="([A-Z]+)\d+"/)?.[1];
+    const raw = cell.match(/<v>(.*?)<\/v>/)?.[1];
+    values[column] = cell.includes(' t="s"') ? strings[Number(raw)] : raw;
+  }
+  return values;
+}
+
+function assignPopulationRow(values, cities, countyKeys, currentCounty, property) {
+  const nameKey = key(values.A);
+  const city = cities.get(cityKey(values.A));
+  const cityCounty = city ? key(city.county) : '';
+  if (city && (cityCounty === currentCounty || cityCounty === nameKey)) {
+    if (cityCounty === nameKey) currentCounty = nameKey;
+    if (Number(values.C) > 0) city[property] = Number(values.C);
+    return currentCounty;
+  }
+  if (countyKeys.has(nameKey) && nameKey !== currentCounty) {
+    countyNames.set(nameKey, values.A);
+    return nameKey;
+  }
+  return currentCounty;
+}
+
+function addSheetValues(sheetPath, property, strings, cities, countyKeys) {
+  const sheet = execFileSync(unzipCommand, ['-p', sources.population, sheetPath], { encoding: 'utf8', maxBuffer: 20_000_000 });
+  const rows = sheet.match(/<row[\s>][\s\S]*?<\/row>/g) || [];
+  let currentCounty = '';
+  let titleVerified = false;
+  let columnVerified = false;
+  for (const xml of rows) {
+    const values = worksheetRow(xml, strings);
+    const nameKey = key(values.A);
+    if (String(values.A || '').startsWith(property === 'housingUnits' ? 'E-1H:' : 'E-1:')) titleVerified = true;
+    if (nameKey === 'STATECOUNTYCITY') {
+      if (!String(values.C || '').includes('1/1/2026')) throw new Error(`${sheetPath}: expected 2026 value in column C`);
+      columnVerified = true;
+      continue;
+    }
+    if (!nameKey || nameKey === 'CALIFORNIA') continue;
+    currentCounty = assignPopulationRow(values, cities, countyKeys, currentCounty, property);
+  }
+  if (!titleVerified || !columnVerified) throw new Error(`${sheetPath}: workbook title or column layout changed`);
+}
+
+
 function addPopulation(cities) {
   const stringsXml = execFileSync(unzipCommand, ['-p', sources.population, 'xl/sharedStrings.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
   const strings = (stringsXml.match(/<si[\s>][\s\S]*?<\/si>/g) || []).map(decodeXml);
   const countyKeys = new Set([...new Set(cities.values())].map((city) => key(city.county)));
-  const addSheetValues = (sheetPath, property) => {
-    const sheet = execFileSync(unzipCommand, ['-p', sources.population, sheetPath], { encoding: 'utf8', maxBuffer: 20_000_000 });
-    const rows = sheet.match(/<row[\s>][\s\S]*?<\/row>/g) || [];
-    let currentCounty = '';
-    let titleVerified = false;
-    let columnVerified = false;
-    for (const xml of rows) {
-      const values = {};
-      for (const cell of xml.match(/<c[\s>][\s\S]*?<\/c>/g) || []) {
-        const column = cell.match(/ r="([A-Z]+)\d+"/)?.[1];
-        const raw = cell.match(/<v>(.*?)<\/v>/)?.[1];
-        values[column] = cell.includes(' t="s"') ? strings[Number(raw)] : raw;
-      }
-      const nameKey = key(values.A);
-      if (String(values.A || '').startsWith(property === 'housingUnits' ? 'E-1H:' : 'E-1:')) titleVerified = true;
-      if (nameKey === 'STATECOUNTYCITY') {
-        if (!String(values.C || '').includes('1/1/2026')) throw new Error(`${sheetPath}: expected 2026 value in column C`);
-        columnVerified = true;
-        continue;
-      }
-      if (!nameKey || nameKey === 'CALIFORNIA') continue;
-      const city = cities.get(cityKey(values.A));
-      if (city && (key(city.county) === currentCounty || key(city.county) === nameKey)) {
-        if (key(city.county) === nameKey) currentCounty = nameKey;
-        if (Number(values.C) > 0) city[property] = Number(values.C);
-        continue;
-      }
-      if (countyKeys.has(nameKey) && nameKey !== currentCounty) { currentCounty = nameKey; countyNames.set(nameKey, values.A); continue; }
-    }
-    if (!titleVerified || !columnVerified) throw new Error(`${sheetPath}: workbook title or column layout changed`);
-  };
-  addSheetValues('xl/worksheets/sheet2.xml', 'population');
-  addSheetValues('xl/worksheets/sheet4.xml', 'housingUnits');
+  addSheetValues('xl/worksheets/sheet2.xml', 'population', strings, cities, countyKeys);
+  addSheetValues('xl/worksheets/sheet4.xml', 'housingUnits', strings, cities, countyKeys);
   const countySheet = execFileSync(unzipCommand, ['-p', sources.population, 'xl/worksheets/sheet3.xml'], { encoding: 'utf8', maxBuffer: 20_000_000 });
   let readingCounties = false;
   for (const xml of countySheet.match(/<row[\s>][\s\S]*?<\/row>/g) || []) {
@@ -177,6 +214,20 @@ function pointInPolygon(point, polygon) {
   return !polygon.slice(1).some((hole) => pointInRing(point, hole));
 }
 
+function nearestClimateZone(coordinates, zones) {
+  let nearest = null;
+  for (const candidate of zones) {
+    const polygons = candidate.geometry.type === 'Polygon' ? [candidate.geometry.coordinates] : candidate.geometry.coordinates;
+    for (const polygon of polygons) {
+      for (const [longitude, latitude] of polygon[0]) {
+        const distance = (longitude - coordinates[0]) ** 2 + (latitude - coordinates[1]) ** 2;
+        if (!nearest || distance < nearest.distance) nearest = { distance, zone: Number(candidate.properties.BZone) };
+      }
+    }
+  }
+  return nearest;
+}
+
 function addClimateZones(cities) {
   const zones = JSON.parse(readFileSync(sources.climateZones, 'utf8')).features;
   for (const city of new Set(cities.values())) {
@@ -195,16 +246,7 @@ function addClimateZones(cities) {
       city.climateZoneMethod = 'representative-point';
       continue;
     }
-    let nearest = null;
-    for (const candidate of zones) {
-      const polygons = candidate.geometry.type === 'Polygon' ? [candidate.geometry.coordinates] : candidate.geometry.coordinates;
-      for (const polygon of polygons) {
-        for (const [longitude, latitude] of polygon[0]) {
-          const distance = (longitude - city.coordinates[0]) ** 2 + (latitude - city.coordinates[1]) ** 2;
-          if (!nearest || distance < nearest.distance) nearest = { distance, zone: Number(candidate.properties.BZone) };
-        }
-      }
-    }
+    const nearest = nearestClimateZone(city.coordinates, zones);
     city.climateZone = nearest?.zone || null;
     city.climateZoneMethod = nearest ? 'nearest-polygon' : 'unassigned';
   }
@@ -269,6 +311,25 @@ function inferDataThrough(entries) {
   return Number.isFinite(Number(latest)) ? new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(latest) : 'Unknown release';
 }
 
+function parseProjectLine(line, indexes, entry) {
+  if (!line.trim() || /^Generated \d{4}-\d{2}-\d{2}T/.test(line)) return null;
+  const row = parseCsv(line);
+  if (row.length <= Math.max(...Object.values(indexes))) throw new Error(`${entry}: incomplete CSV row`);
+  if (!/photovoltaic/i.test(row[indexes.technology] || '')) return null;
+  const capacityKw = Number(row[indexes.capacity]);
+  if (!Number.isFinite(capacityKw) || capacityKw <= 0) return null;
+  const sector = sectorKey(row[indexes.sector]);
+  const storageRaw = (row[indexes.storage] || '').trim();
+  const match = /(19|20)\d{2}/.exec(row[indexes.approved] || '');
+  const parsedYear = match ? Number(match[0]) : null;
+  const year = parsedYear == null || parsedYear > currentYear ? null : Math.max(2001, parsedYear);
+  return { row, project: { capacityKw, sector, storageRaw, utility: row[indexes.utility], year } };
+}
+
+function sourceLocationName(value) {
+  return (value || 'blank').trim() || 'blank';
+}
+
 async function aggregateEntry(entry, cities, counties, dropped) {
   const child = spawn(unzipCommand, ['-p', sources.projects, entry]);
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
@@ -284,24 +345,16 @@ async function aggregateEntry(entry, cities, counties, dropped) {
       indexes = Object.fromEntries(fields.map(([field, name]) => [field, header.indexOf(name)]));
       continue;
     }
-    if (!line.trim() || /^Generated \d{4}-\d{2}-\d{2}T/.test(line)) continue;
-    const row = parseCsv(line);
-    if (row.length <= Math.max(...Object.values(indexes))) throw new Error(`${entry}: incomplete CSV row`);
-    if (!/photovoltaic/i.test(row[indexes.technology] || '')) continue;
-    const capacityKw = Number(row[indexes.capacity]);
-    if (!Number.isFinite(capacityKw) || capacityKw <= 0) continue;
-    const sector = sectorKey(row[indexes.sector]);
-    const storageRaw = (row[indexes.storage] || '').trim();
-    const match = (row[indexes.approved] || '').match(/(19|20)\d{2}/);
-    const parsedYear = match ? Number(match[0]) : null;
-    const year = parsedYear == null || parsedYear > currentYear ? null : Math.max(2001, parsedYear);
-    const project = { capacityKw, sector, storageRaw, utility: row[indexes.utility], year };
+    const parsed = parseProjectLine(line, indexes, entry);
+    if (!parsed) continue;
+    const { row, project } = parsed;
+    const { capacityKw } = project;
     const county = counties.get(key(row[indexes.county]));
     if (!county) {
       // Drop the row from both aggregates so county and city subtotals stay reconcilable.
       dropped.countyProjects += 1;
       dropped.countyCapacityKw += capacityKw;
-      dropped.serviceCounties.add((row[indexes.county] || 'blank').trim() || 'blank');
+      dropped.serviceCounties.add(sourceLocationName(row[indexes.county]));
       continue;
     }
     addProject(county, project);
@@ -310,7 +363,7 @@ async function aggregateEntry(entry, cities, counties, dropped) {
     else {
       dropped.projects += 1;
       dropped.capacityKw += capacityKw;
-      dropped.serviceCities.add((row[indexes.city] || 'blank').trim() || 'blank');
+      dropped.serviceCities.add(sourceLocationName(row[indexes.city]));
     }
   }
   const status = await new Promise((done) => child.on('close', done));
@@ -329,10 +382,11 @@ const entries = await zipEntries();
 if (!dataThrough) dataThrough = inferDataThrough(entries);
 const UNRESOLVED_COUNTY_CEILING = 0.005;
 const dropped = { projects: 0, capacityKw: 0, serviceCities: new Set(), countyProjects: 0, countyCapacityKw: 0, serviceCounties: new Set() };
-for (const entry of entries) {
+// Readers mutate shared aggregates; preserve ordering and keep memory bounded.
+await entries.reduce((pending, entry) => pending.then(() => {
   process.stdout.write(`Aggregating ${entry}\n`);
-  await aggregateEntry(entry, cities, countyAggregates, dropped);
-}
+  return aggregateEntry(entry, cities, countyAggregates, dropped);
+}), Promise.resolve());
 
 // Publicly owned utility capacity is kept in its own field rather than folded into
 // capacityMw. capacityMw stays the DG Stats IOU inventory, so every county and
@@ -346,6 +400,19 @@ if (unresolvedShare > UNRESOLVED_COUNTY_CEILING) {
 }
 
 const municipalKeys = new Set(coverageRegistry.partialCities.map(key));
+function geographyRiskFor(percentage) {
+  if (percentage == null) return 'unknown';
+  return percentage > 35 ? 'likely-mailing-inflation' : 'not-flagged';
+}
+
+function coverageFor(city) {
+  if (municipalKeys.has(key(city.name))) {
+    return { status: 'partial', note: coverageRegistry.notes[key(city.name)] || coverageRegistry.defaultPartialNote };
+  }
+  if (city.projects) return { status: 'reported', note: coverageRegistry.defaultReportedNote };
+  return { status: 'unverified', note: coverageRegistry.defaultUnverifiedNote };
+}
+
 const records = [...uniqueCities.values()].map((city) => {
   let cumulativeKw = 0;
   let effectiveKw = 0;
@@ -374,7 +441,7 @@ const records = [...uniqueCities.values()].map((city) => {
   const sectors = Object.fromEntries(Object.entries(city.sectors).map(([name, value]) => [name, { mw: Number((value.kw / 1000).toFixed(3)), projects: value.projects }]));
   const housingUnits = city.housingUnits || null;
   const residentialSiteHousingPct = housingUnits ? Number((sectors.residential.projects / housingUnits * 100).toFixed(1)) : null;
-  const geographyRisk = residentialSiteHousingPct == null ? 'unknown' : residentialSiteHousingPct > 35 ? 'likely-mailing-inflation' : 'not-flagged';
+  const geographyRisk = geographyRiskFor(residentialSiteHousingPct);
   const record = {
     name: city.name,
     county: city.county,
@@ -403,13 +470,11 @@ const records = [...uniqueCities.values()].map((city) => {
     storageInvalidValues: city.storageInvalidValues,
     storageCapacityStatus: 'withheld-source-units-inconsistent',
     growth5yPct,
-    utilities: [...city.utilities].sort(),
+    utilities: [...city.utilities].sort((a, b) => a.localeCompare(b)),
     sectors,
     timeline,
     timelineQuality: 'approval-date proxy',
-    coverage: municipalKeys.has(key(city.name))
-      ? { status: 'partial', note: coverageRegistry.notes[key(city.name)] || coverageRegistry.defaultPartialNote }
-      : { status: city.projects ? 'reported' : 'unverified', note: city.projects ? coverageRegistry.defaultReportedNote : coverageRegistry.defaultUnverifiedNote }
+    coverage: coverageFor(city)
   };
   if (loadRegistry[key(city.name)]) record.load = loadRegistry[key(city.name)];
   const pou = pouMerged.get(key(city.name));

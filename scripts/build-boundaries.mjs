@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { requiredSourcePath } from './source-path.mjs';
 import proj4 from 'proj4';
 
 const projectRoot = resolve(import.meta.dirname, '..');
-const input = resolve(process.env.CA_CITY_GEOJSON || '/tmp/ca-city-boundaries.geojson');
+const input = requiredSourcePath('CA_CITY_GEOJSON');
 const output = resolve(projectRoot, 'public/data/boundaries.json');
 const source = JSON.parse(readFileSync(input, 'utf8'));
 const sourceCrs = source.crs?.properties?.name || 'EPSG:4326';
@@ -59,7 +60,8 @@ function project(coordinate) {
 function ringPath(ring) {
   const points = simplifyRing(ring).map(project);
   if (points.length < 3) return '';
-  return `${points.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`).join('')}Z`;
+  const segments = points.map(([x, y], index) => `${index ? 'L' : 'M'}${x.toFixed(1)} ${y.toFixed(1)}`);
+  return `${segments.join('')}Z`;
 }
 
 const grouped = new Map();

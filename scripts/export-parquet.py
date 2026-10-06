@@ -110,7 +110,10 @@ def validate_meta(meta: dict[str, Any]) -> None:
             raise ValueError(f"meta.{field} must be a non-empty string")
     if not finite_number(meta["sourceCapacityMw"]) or not finite_number(meta["totalCapacityMw"]):
         raise ValueError("meta capacity totals must be finite numeric values")
-    benchmark = meta["allUtilityBenchmark"]
+    validate_statewide_benchmark(meta["allUtilityBenchmark"])
+
+
+def validate_statewide_benchmark(benchmark: object) -> None:
     if not isinstance(benchmark, dict):
         raise ValueError("meta.allUtilityBenchmark must be an object")
     require_keys(benchmark, {"year", "statewideCapacityMwAc", "basis", "sourceUrl"}, "meta.allUtilityBenchmark")
@@ -123,6 +126,83 @@ def validate_meta(meta: dict[str, Any]) -> None:
             raise ValueError(f"meta.allUtilityBenchmark.{field} must be a non-empty string")
 
 
+def validate_city_identity(city: dict[str, Any], index: int) -> None:
+    if not isinstance(city["id"], str) or not city["id"] or not isinstance(city["name"], str) or not city["name"]:
+        raise ValueError(f"city[{index}] id/name must be non-empty strings")
+    if not isinstance(city["county"], str) or not city["county"] or (city["geoid"] is not None and (not isinstance(city["geoid"], str) or not city["geoid"])):
+        raise ValueError(f"city[{index}] county must be a non-empty string and geoid must be null or a non-empty string")
+
+
+def validate_city_quantities(city: dict[str, Any], index: int) -> None:
+    if not finite_number(city["capacityMw"]) or not isinstance(city["projects"], int) or isinstance(city["projects"], bool):
+        raise ValueError(f"city[{index}] capacityMw/projects have unexpected types")
+    if not all(isinstance(utility, str) for utility in city["utilities"]):
+        raise ValueError(f"city[{index}] utilities must contain only strings")
+    if not 0 < len(city["timeline"]) <= 200:
+        raise ValueError(f"city[{index}] timeline must contain 1–200 points")
+
+
+def validate_city_point(point: object, index: int, point_index: int) -> None:
+    if not isinstance(point, dict) or not {"year", "mw", "addedMw", "projects"} <= point.keys():
+        raise ValueError(f"city[{index}].timeline[{point_index}] is malformed")
+    if not isinstance(point["year"], int) or isinstance(point["year"], bool) or not isinstance(point["projects"], int) or isinstance(point["projects"], bool) or not finite_number(point["mw"]) or not finite_number(point["addedMw"]):
+        raise ValueError(f"city[{index}].timeline[{point_index}] contains null, boolean, nonnumeric, or non-finite values")
+
+
+def validate_city(city: object, index: int) -> None:
+    if not isinstance(city, dict):
+        raise ValueError(f"city[{index}] must be an object")
+    require_keys(city, {"id", "name", "county", "geoid", "capacityMw", "projects", "timeline", "utilities"}, f"city[{index}]")
+    if not isinstance(city["timeline"], list) or not isinstance(city["utilities"], list):
+        raise ValueError(f"city[{index}] timeline/utilities must be arrays")
+    validate_city_identity(city, index)
+    validate_city_quantities(city, index)
+    for point_index, point in enumerate(city["timeline"]):
+        validate_city_point(point, index, point_index)
+
+
+def validate_county_benchmark(county: dict[str, Any], index: int) -> None:
+    benchmark = county["allUtilityBenchmark"]
+    if not isinstance(benchmark, dict):
+        raise ValueError(f"county[{index}].allUtilityBenchmark must be an object")
+    require_keys(benchmark, {"year", "capacityMwAc", "basis", "sourceUrl"}, f"county[{index}].allUtilityBenchmark")
+    if not finite_number(benchmark["capacityMwAc"]):
+        raise ValueError(f"county[{index}].allUtilityBenchmark.capacityMwAc must be finite")
+    if not isinstance(benchmark["year"], int) or isinstance(benchmark["year"], bool):
+        raise ValueError(f"county[{index}].allUtilityBenchmark.year must be an integer")
+    for field in ("basis", "sourceUrl"):
+        if not isinstance(benchmark[field], str) or not benchmark[field].strip():
+            raise ValueError(f"county[{index}].allUtilityBenchmark.{field} must be a non-empty string")
+
+
+def validate_county_identity(county: dict[str, Any], index: int) -> None:
+    if not isinstance(county["timeline"], list):
+        raise ValueError(f"county[{index}] timeline must be an array")
+    if not isinstance(county["slug"], str) or not county["slug"] or not isinstance(county["name"], str) or not county["name"]:
+        raise ValueError(f"county[{index}] slug/name must be non-empty strings")
+    if not finite_number(county["capacityMw"]) or not isinstance(county["projects"], int) or isinstance(county["projects"], bool):
+        raise ValueError(f"county[{index}] capacityMw/projects have unexpected types")
+    if not 0 < len(county["timeline"]) <= 200:
+        raise ValueError(f"county[{index}] timeline must contain 1–200 points")
+
+
+def validate_county_point(point: object, index: int, point_index: int) -> None:
+    if not isinstance(point, dict) or not {"year", "mw"} <= point.keys():
+        raise ValueError(f"county[{index}].timeline[{point_index}] is malformed")
+    if not isinstance(point["year"], int) or isinstance(point["year"], bool) or not finite_number(point["mw"]):
+        raise ValueError(f"county[{index}].timeline[{point_index}] contains null, boolean, nonnumeric, or non-finite values")
+
+
+def validate_county(county: object, index: int) -> None:
+    if not isinstance(county, dict):
+        raise ValueError(f"county[{index}] must be an object")
+    require_keys(county, {"slug", "name", "capacityMw", "projects", "timeline", "allUtilityBenchmark"}, f"county[{index}]")
+    validate_county_benchmark(county, index)
+    validate_county_identity(county, index)
+    for point_index, point in enumerate(county["timeline"]):
+        validate_county_point(point, index, point_index)
+
+
 def validate_payload(payload: object) -> dict[str, Any]:
     """Validate the structure required by the analytical export."""
     if not isinstance(payload, dict):
@@ -133,54 +213,9 @@ def validate_payload(payload: object) -> dict[str, Any]:
         raise ValueError("payload meta/cities/counties have unexpected types")
     validate_meta(payload["meta"])
     for index, city in enumerate(payload["cities"]):
-        if not isinstance(city, dict):
-            raise ValueError(f"city[{index}] must be an object")
-        require_keys(city, {"id", "name", "county", "geoid", "capacityMw", "projects", "timeline", "utilities"}, f"city[{index}]")
-        if not isinstance(city["timeline"], list) or not isinstance(city["utilities"], list):
-            raise ValueError(f"city[{index}] timeline/utilities must be arrays")
-        if not isinstance(city["id"], str) or not city["id"] or not isinstance(city["name"], str) or not city["name"]:
-            raise ValueError(f"city[{index}] id/name must be non-empty strings")
-        if not isinstance(city["county"], str) or not city["county"] or (city["geoid"] is not None and (not isinstance(city["geoid"], str) or not city["geoid"])):
-            raise ValueError(f"city[{index}] county must be a non-empty string and geoid must be null or a non-empty string")
-        if not finite_number(city["capacityMw"]) or not isinstance(city["projects"], int) or isinstance(city["projects"], bool):
-            raise ValueError(f"city[{index}] capacityMw/projects have unexpected types")
-        if not all(isinstance(utility, str) for utility in city["utilities"]):
-            raise ValueError(f"city[{index}] utilities must contain only strings")
-        if not 0 < len(city["timeline"]) <= 200:
-            raise ValueError(f"city[{index}] timeline must contain 1–200 points")
-        for point_index, point in enumerate(city["timeline"]):
-            if not isinstance(point, dict) or not {"year", "mw", "addedMw", "projects"} <= point.keys():
-                raise ValueError(f"city[{index}].timeline[{point_index}] is malformed")
-            if not isinstance(point["year"], int) or isinstance(point["year"], bool) or not isinstance(point["projects"], int) or isinstance(point["projects"], bool) or not finite_number(point["mw"]) or not finite_number(point["addedMw"]):
-                raise ValueError(f"city[{index}].timeline[{point_index}] contains null, boolean, nonnumeric, or non-finite values")
+        validate_city(city, index)
     for index, county in enumerate(payload["counties"]):
-        if not isinstance(county, dict):
-            raise ValueError(f"county[{index}] must be an object")
-        require_keys(county, {"slug", "name", "capacityMw", "projects", "timeline", "allUtilityBenchmark"}, f"county[{index}]")
-        benchmark = county["allUtilityBenchmark"]
-        if not isinstance(benchmark, dict):
-            raise ValueError(f"county[{index}].allUtilityBenchmark must be an object")
-        require_keys(benchmark, {"year", "capacityMwAc", "basis", "sourceUrl"}, f"county[{index}].allUtilityBenchmark")
-        if not finite_number(benchmark["capacityMwAc"]):
-            raise ValueError(f"county[{index}].allUtilityBenchmark.capacityMwAc must be finite")
-        if not isinstance(benchmark["year"], int) or isinstance(benchmark["year"], bool):
-            raise ValueError(f"county[{index}].allUtilityBenchmark.year must be an integer")
-        for field in ("basis", "sourceUrl"):
-            if not isinstance(benchmark[field], str) or not benchmark[field].strip():
-                raise ValueError(f"county[{index}].allUtilityBenchmark.{field} must be a non-empty string")
-        if not isinstance(county["timeline"], list):
-            raise ValueError(f"county[{index}] timeline must be an array")
-        if not isinstance(county["slug"], str) or not county["slug"] or not isinstance(county["name"], str) or not county["name"]:
-            raise ValueError(f"county[{index}] slug/name must be non-empty strings")
-        if not finite_number(county["capacityMw"]) or not isinstance(county["projects"], int) or isinstance(county["projects"], bool):
-            raise ValueError(f"county[{index}] capacityMw/projects have unexpected types")
-        if not 0 < len(county["timeline"]) <= 200:
-            raise ValueError(f"county[{index}] timeline must contain 1–200 points")
-        for point_index, point in enumerate(county["timeline"]):
-            if not isinstance(point, dict) or not {"year", "mw"} <= point.keys():
-                raise ValueError(f"county[{index}].timeline[{point_index}] is malformed")
-            if not isinstance(point["year"], int) or isinstance(point["year"], bool) or not finite_number(point["mw"]):
-                raise ValueError(f"county[{index}].timeline[{point_index}] contains null, boolean, nonnumeric, or non-finite values")
+        validate_county(county, index)
     if len(payload["cities"]) > 1_000 or len(payload["counties"]) > 100:
         raise ValueError("Entity count exceeds the bounded California dataset contract")
     city_ids = [city["id"] for city in payload["cities"]]

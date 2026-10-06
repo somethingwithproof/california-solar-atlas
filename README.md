@@ -41,6 +41,10 @@ CA_CITY_GEOJSON=/path/to/city-boundaries.geojson npm run data:boundaries
 
 The scripts keep the large raw files outside the repository and emit compact city and boundary files suitable for GitHub Pages.
 
+Each source path must be supplied explicitly; the scripts fail when a required
+variable is missing. The refresh workflow downloads into a private directory for
+each run and permits HTTPS redirects only.
+
 Build the Parquet release assets from the browser JSON with:
 
 ```bash
@@ -70,6 +74,10 @@ Run `npm test` to validate schema, city coverage, capacity, generation arithmeti
 See [the data correctness audit](docs/data-audit.md) for the capacity-column verification, San Jose storage spot check, mailing-geography diagnostic, and reconciliation checks. See [the utility data audit](docs/utility-data-audit.md) for municipal-utility and CCA coverage.
 
 ## Security and dependency maintenance
+
+Rendered HTML and SVG pass through DOMPurify before reaching the document.
+The rendering tests cover active-content removal and preservation of map paths,
+accessible controls, and source links.
 
 GitHub CodeQL, secret scanning with push protection, private vulnerability reporting, dependency review, and Dependabot security updates protect the public repository. `.github/dependabot.yml` also schedules weekly npm and GitHub Actions version updates. See [SECURITY.md](SECURITY.md) for private reporting.
 

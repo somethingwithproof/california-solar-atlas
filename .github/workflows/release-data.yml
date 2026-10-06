@@ -31,7 +31,8 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-data-release.txt
       - name: Install Parquet exporter
-        run: python -m pip install --require-hashes --requirement requirements-data-release.txt
+        run: |
+          python -m pip install --only-binary=:all: --require-hashes --requirement requirements-data-release.txt
       - name: Build and verify release assets
         run: |
           python scripts/export-parquet.py

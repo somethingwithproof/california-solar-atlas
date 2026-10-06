@@ -24,17 +24,26 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Download authoritative sources
         run: |
-          curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/csv?layers=2' --output /tmp/ca-cities.csv
-          curl --fail --location --retry 3 'https://www.californiadgstats.ca.gov/download/interconnection_rule21_projects/' --output /tmp/ca-dg-projects.zip
-          curl --fail --location --retry 3 'https://dof.ca.gov/media/docs/forecasting/Demographics/estimates-e1/E-1_2026_InternetVersion.xlsx' --output /tmp/ca-population-2026.xlsx
-          curl --fail --location --retry 3 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_gaz_place_06.txt' --output /tmp/ca-place-gazetteer.txt
-          curl --fail --location --retry 3 'https://services3.arcgis.com/bWPjFyq029ChCGur/arcgis/rest/services/BuildingClimateZones_CEC_2015/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson' --output /tmp/ca-climate-zones.geojson
+          source_dir=$(mktemp -d "$RUNNER_TEMP/atlas-sources.XXXXXX")
+          {
+            echo "CA_CITY_CSV=$source_dir/ca-cities.csv"
+            echo "CA_DG_ZIP=$source_dir/ca-dg-projects.zip"
+            echo "CA_POPULATION_XLSX=$source_dir/ca-population-2026.xlsx"
+            echo "CA_GAZETTEER=$source_dir/ca-place-gazetteer.txt"
+            echo "CA_CLIMATE_ZONES=$source_dir/ca-climate-zones.geojson"
+            echo "CA_CITY_GEOJSON=$source_dir/ca-city-boundaries.geojson"
+          } >> "$GITHUB_ENV"
+          curl --proto '=https' --proto-redir '=https' --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/csv?layers=2' --output "$source_dir/ca-cities.csv"
+          curl --proto '=https' --proto-redir '=https' --fail --location --retry 3 'https://www.californiadgstats.ca.gov/download/interconnection_rule21_projects/' --output "$source_dir/ca-dg-projects.zip"
+          curl --proto '=https' --proto-redir '=https' --fail --location --retry 3 'https://dof.ca.gov/media/docs/forecasting/Demographics/estimates-e1/E-1_2026_InternetVersion.xlsx' --output "$source_dir/ca-population-2026.xlsx"
+          curl --proto '=https' --proto-redir '=https' --fail --location --retry 3 'https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_gaz_place_06.txt' --output "$source_dir/ca-place-gazetteer.txt"
+          curl --proto '=https' --proto-redir '=https' --fail --location --retry 3 'https://services3.arcgis.com/bWPjFyq029ChCGur/arcgis/rest/services/BuildingClimateZones_CEC_2015/FeatureServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&f=geojson' --output "$source_dir/ca-climate-zones.geojson"
           for _ in 1 2 3 4 5 6; do
-            curl --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/geojson?layers=2' --output /tmp/ca-city-boundaries.geojson
-            if jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null 2>&1; then break; fi
+            curl --proto '=https' --proto-redir '=https' --fail --location --retry 3 'https://gis.data.ca.gov/api/download/v1/items/8cd5d2038c5547ba911eea7bec48e28b/geojson?layers=2' --output "$source_dir/ca-city-boundaries.geojson"
+            if jq --exit-status '.features | length > 0' "$source_dir/ca-city-boundaries.geojson" >/dev/null 2>&1; then break; fi
             sleep 20
           done
-          jq --exit-status '.features | length > 0' /tmp/ca-city-boundaries.geojson >/dev/null
+          jq --exit-status '.features | length > 0' "$source_dir/ca-city-boundaries.geojson" >/dev/null
       - name: Aggregate and validate
         run: |
           npm run data:build
