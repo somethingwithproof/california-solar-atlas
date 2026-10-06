@@ -4,6 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { requiredSourcePath } from './source-path.mjs';
+import { decodeXml } from './xml.mjs';
 import { pouByCity, applyPouCapacity, trimStateSuffix } from './pou-attribution.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
@@ -24,29 +25,6 @@ const pouAttribution = JSON.parse(readFileSync(resolve(projectRoot, 'data/pou-at
 let dataThrough = process.env.DATA_THROUGH || '';
 const currentYear = Number(process.env.DATA_YEAR || 2026);
 const countyNames = new Map();
-
-function stripXmlTags(value) {
-  let result = '';
-  let cursor = 0;
-  while (cursor < value.length) {
-    const start = value.indexOf('<', cursor);
-    if (start < 0) return result + value.slice(cursor);
-    const end = value.indexOf('>', start + 1);
-    if (end < 0) return result + value.slice(cursor);
-    if (end === start + 1) {
-      result += value.slice(cursor, end + 1);
-      cursor = end + 1;
-      continue;
-    }
-    result += value.slice(cursor, start);
-    cursor = end + 1;
-  }
-  return result;
-}
-
-function decodeXml(value = '') {
-  return stripXmlTags(value).replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>').replaceAll('&#39;', "'").replaceAll('&quot;', '"');
-}
 
 function parseCsv(line) {
   const values = [];

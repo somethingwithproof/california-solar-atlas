@@ -248,7 +248,11 @@ function cityCsv(city) {
 }
 
 function cityTrendPanel(city) {
-  return `<article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative dated MW-DC by approval date</h3>${city.pouCapacity ? '<small class="panel-scope">IOU records only. Municipal capacity has no install years, so it is absent from this chart and the growth figure.</small>' : ''}</div><div class="panel-actions"><strong>${city.growth5yPct == null ? '—' : `+${format.format(city.growth5yPct)}%`} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}${city.undatedProjects ? `<p>${integer.format(city.undatedProjects)} projects (${format.format(city.undatedCapacityMw)} MW-DC) lack a parseable approval year and are excluded from this chart and growth rate.</p>` : ''}</article>`;
+  const growth = city.growth5yPct == null ? '—' : '+' + format.format(city.growth5yPct) + '%';
+  const undatedNote = city.undatedProjects
+    ? `<p>${integer.format(city.undatedProjects)} projects (${format.format(city.undatedCapacityMw)} MW-DC) lack a parseable approval year and are excluded from this chart and growth rate.</p>`
+    : '';
+  return `<article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative dated MW-DC by approval date</h3>${city.pouCapacity ? '<small class="panel-scope">IOU records only. Municipal capacity has no install years, so it is absent from this chart and the growth figure.</small>' : ''}</div><div class="panel-actions"><strong>${growth} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}${undatedNote}</article>`;
 }
 
 function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
