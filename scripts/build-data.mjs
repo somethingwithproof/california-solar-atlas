@@ -4,7 +4,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { resolve } from 'node:path';
 import { requiredSourcePath } from './source-path.mjs';
-import { decodeXml } from './xml.mjs';
+import { decodeXml, positiveWorksheetValue } from './xml.mjs';
 import { pouByCity, applyPouCapacity, trimStateSuffix } from './pou-attribution.mjs';
 
 const projectRoot = resolve(import.meta.dirname, '..');
@@ -127,7 +127,8 @@ function assignPopulationRow(values, cities, countyKeys, currentCounty, property
   const cityCounty = city ? key(city.county) : '';
   if (city && (cityCounty === currentCounty || cityCounty === nameKey)) {
     if (cityCounty === nameKey) currentCounty = nameKey;
-    if (Number(values.C) > 0) city[property] = Number(values.C);
+    const value = positiveWorksheetValue(values.C, `${city.name} ${property}`);
+    if (value != null) city[property] = value;
     return currentCounty;
   }
   if (countyKeys.has(nameKey) && nameKey !== currentCounty) {

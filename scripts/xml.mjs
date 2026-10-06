@@ -22,3 +22,9 @@ export function decodeXml(value = '') {
   return stripXmlTags(value).replace(/&(amp|lt|gt|#39|quot);/g, (_, name) => entities[name]);
 }
 
+export function positiveWorksheetValue(raw, context) {
+  if (raw == null || String(raw).trim() === '') return null;
+  const value = Number(raw);
+  if (!Number.isFinite(value)) throw new Error(`${context}: worksheet value must be numeric and finite`);
+  return value > 0 ? value : null;
+}
