@@ -143,9 +143,11 @@ def only_column(columns: list[str], predicate, label: str) -> str:
 
 def net_metering(archive_bytes: bytes) -> list[dict[str, object]]:
     """Extract California net-metered photovoltaic capacity per utility."""
-    with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
-        with archive.open(f"Net_Metering_{EIA_YEAR}.xlsx") as handle:
-            frame = pd.read_excel(handle, header=[0, 1, 2])
+    with (
+        zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive,
+        archive.open(f"Net_Metering_{EIA_YEAR}.xlsx") as handle,
+    ):
+        frame = pd.read_excel(handle, header=[0, 1, 2])
     frame.columns = [" ".join(str(part) for part in column if "Unnamed" not in str(part)).strip() for column in frame.columns]
     columns = list(frame.columns)
     state = only_column(columns, lambda column: column.endswith("State"), "state")

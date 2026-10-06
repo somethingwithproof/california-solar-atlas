@@ -237,8 +237,9 @@ class ExportParquetTests(unittest.TestCase):
 
     def test_schema_fingerprint_rejects_type_drift(self) -> None:
         fields = [pa.field(field.name, pa.float64() if field.name == "projects" else field.type) for field in export_parquet.CITY_SCHEMA]
+        changed_schema = pa.schema(fields)
         with self.assertRaisesRegex(validate_parquet.ValidationError, "fingerprint drifted"):
-            validate_parquet.verify_schema("cities", pa.schema(fields))
+            validate_parquet.verify_schema("cities", changed_schema)
 
     def test_schema_generator_matches_validator_pins(self) -> None:
         self.assertEqual(export_parquet.CITY_SCHEMA.names, sorted(export_parquet.CITY_SCHEMA.names))
