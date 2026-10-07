@@ -1,5 +1,8 @@
 # California Solar Atlas
 
+[![CI](https://github.com/somethingwithproof/california-solar-atlas/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/somethingwithproof/california-solar-atlas/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+
 A static, searchable explorer for distributed solar in every incorporated California city and all 58 counties. It uses real interconnected project-site capacity and never invents a city electricity denominator where one has not been verified.
 
 The interface is designed for GitHub Pages: no server, database, API keys, or runtime data pipeline is required. The compact city aggregate is committed; the 1.2 GB raw source remains outside the repository.
@@ -23,7 +26,7 @@ See [CI and selective Sonar analysis](docs/ci.md) for workflow ownership,
 data/security checks, coverage, and Sonar setup during modernization.
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
