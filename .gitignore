@@ -7,3 +7,6 @@ dist-data/
 __pycache__/
 .pou-cache/
 dist-data.retired-*
+coverage/
+.scannerwork/
+.sonar-ci.properties
