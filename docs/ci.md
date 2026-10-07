@@ -127,11 +127,16 @@ The API also reported **Automatic Analysis enabled**. Disable it in SonarCloud
 automatic scans can bypass this branch policy, and CI analysis may be rejected.
 No Sonar settings or GitHub variables/secrets were changed by this implementation.
 
-In GitHub **Settings → Secrets and variables → Actions**, configure:
+In GitHub **Settings → Environments**, create the `sonar` environment and store
+its `SONAR_TOKEN` secret there. This environment is used only by the scanner job;
+eligibility and coverage cannot access that environment secret. Do not also store
+a globally accessible repository copy of the token. Environment approval rules
+are optional maintainer policy and are not enabled by this implementation.
+Set the variables below in **Settings → Secrets and variables → Actions**:
 
 | Kind | Name | Value/meaning |
 | --- | --- | --- |
-| Repository secret | `SONAR_TOKEN` | Token authorized to analyze the existing project; never commit or echo it |
+| `sonar` environment secret | `SONAR_TOKEN` | Token authorized to analyze the existing project; never commit or echo it |
 | Repository variable | `ENABLE_SONAR` | `true` to enable the branch/manual rules; absent/false skips |
 | Optional variable | `SONAR_PLATFORM` | `cloud` (default) or `server` |
 | Optional variable | `SONAR_HOST_URL` | HTTPS server URL; default cloud destination is `https://sonarcloud.io` |
@@ -144,7 +149,8 @@ accident. The runner must reach the server, trust its HTTPS certificate, and hav
 an edition/license that supports the requested PR/branch analysis. Organization
 is removed from server configuration. No self-hosted instance was discovered.
 
-No token is currently configured in this repository. If an eligible scan is
+No repository token was configured at audit time; no environment token was accessed.
+If an eligible scan is
 requested without it, **Sonar Quality Gate fails with a clear configuration error**.
 Authentication, scanner, server-processing and quality-gate failures remain visible.
 An eligible run with failed coverage also fails the gate job explicitly, rather
@@ -213,7 +219,8 @@ enabled; this setting is about credential isolation, not hiding findings.
   `ENABLE_SONAR=true` value, PR source branch, actor, and fork status. For ordinary
   modernization branches, use manual dispatch on a reviewed repository branch.
 - **Missing token:** configure `SONAR_TOKEN` before enabling an eligible run.
-  Missing credentials fail explicitly; a disabled switch skips without reading them.
+  Store it in the `sonar` environment. Missing credentials fail explicitly; a
+  disabled switch skips without reading them.
 - **CI analysis rejected:** disable SonarCloud Automatic Analysis in the existing
   project's Analysis Method settings. Verify the project key/organization/token.
 - **Scanner or gate failure:** inspect the failing scanner step and Sonar dashboard.

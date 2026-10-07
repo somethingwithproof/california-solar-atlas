@@ -65,6 +65,7 @@ jobs:
 
   analysis:
     name: Sonar Quality Gate
+    environment: sonar
     needs: [eligibility, coverage]
     # Independent guard: a PR-controlled policy script cannot grant fork access.
     if: >-
