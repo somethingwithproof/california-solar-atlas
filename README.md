@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/somethingwithproof/california-solar-atlas/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/somethingwithproof/california-solar-atlas/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/somethingwithproof/california-solar-atlas/badge)](https://scorecard.dev/viewer/?uri=github.com/somethingwithproof/california-solar-atlas)
 
 A static, searchable explorer for distributed solar in every incorporated California city and all 58 counties. It uses real interconnected project-site capacity and never invents a city electricity denominator where one has not been verified.
 
