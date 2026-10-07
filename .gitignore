@@ -10,3 +10,7 @@ dist-data.retired-*
 coverage/
 .scannerwork/
 .sonar-ci.properties
+
+# Local assistant sessions and isolated worktrees
+.omc/
+.worktrees/
