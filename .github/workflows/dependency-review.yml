@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   review:
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - name: Review dependency changes
