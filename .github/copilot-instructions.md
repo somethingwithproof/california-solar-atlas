@@ -12,3 +12,10 @@ Review this repository as a static, public-data visualization whose primary risk
 - Treat all JSON content as untrusted at the rendering boundary. Escape text, restrict URLs to HTTPS, validate SVG path syntax, and avoid introducing executable HTML.
 - Require `npm test`, `npm run build`, and a clean `npm audit` for dependency or application changes.
 - In GitHub Actions, minimize permissions, keep checkout credentials disabled until a push is required, and pin third-party actions to full commit SHAs with a version comment for Dependabot.
+
+## Repository workflow guidance
+
+Read [AGENTS.md](../AGENTS.md) for architecture, runtime selection, offline
+commands, data-release verification and operational boundaries. Preserve the
+scientific review rules above; Sonar findings do not replace data validation.
+Select the Node and Python runtimes through `mise`, matching the checked-out CI.
