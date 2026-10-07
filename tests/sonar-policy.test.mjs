@@ -1,9 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { sonarPolicy } from '../scripts/sonar-policy.mjs';
 
 const repository = 'somethingwithproof/california-solar-atlas';
@@ -53,22 +50,14 @@ test('Dependabot requests skip rather than failing for unavailable secrets', () 
 test('unsupported event is never promoted to secret-dependent analysis', () => {
   assert.equal(sonarPolicy(input('sonar/check', { eventName: 'pull_request_target' })).eligible, false);
 });
-test('CLI uses GitHub event/environment contract and explains a clean skip', (t) => {
-  const directory = mkdtempSync(join(tmpdir(), 'atlas-sonar-policy-'));
-  t.after(() => rmSync(directory, { recursive: true, force: true }));
-  const eventPath = join(directory, 'event.json');
-  const outputPath = join(directory, 'output');
-  const summaryPath = join(directory, 'summary');
-  writeFileSync(eventPath, JSON.stringify(input('feature/accuracy').event));
-  execFileSync(process.execPath, ['scripts/sonar-policy.mjs'], {
+test('CLI emits policy outputs without filesystem destinations', () => {
+  const output = execFileSync(process.execPath, ['scripts/sonar-policy.mjs'], {
+    encoding: 'utf8',
     env: {
       ENABLE_SONAR: 'true', GITHUB_EVENT_NAME: 'pull_request',
       GITHUB_REF: 'refs/pull/42/merge', GITHUB_ACTOR: 'maintainer',
-      GITHUB_EVENT_PATH: eventPath, GITHUB_OUTPUT: outputPath,
-      GITHUB_STEP_SUMMARY: summaryPath,
+      GITHUB_EVENT_JSON: JSON.stringify(input('feature/accuracy').event),
     },
   });
-  assert.equal(readFileSync(outputPath, 'utf8'), 'eligible=false\n');
-  assert.match(readFileSync(summaryPath, 'utf8'), /\*\*skipped\*\*/);
-  assert.match(readFileSync(summaryPath, 'utf8'), /analysis not requested/);
+  assert.equal(output, 'eligible=false\nreason=Modernization branch: analysis not requested\n');
 });

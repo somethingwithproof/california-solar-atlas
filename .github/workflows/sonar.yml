@@ -38,7 +38,14 @@ jobs:
         env:
           ENABLE_SONAR: ${{ vars.ENABLE_SONAR }}
           RUN_SONAR: ${{ inputs.run_sonar }}
-        run: node scripts/sonar-policy.mjs
+          GITHUB_EVENT_JSON: ${{ toJSON(github.event) }}
+        run: |
+          node scripts/sonar-policy.mjs >> "$GITHUB_OUTPUT"
+      - name: Summarize execution policy
+        env:
+          ELIGIBLE: ${{ steps.policy.outputs.eligible }}
+          REASON: ${{ steps.policy.outputs.reason }}
+        run: printf 'Sonar eligible=%s — %s.\n' "$ELIGIBLE" "$REASON" >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
     name: Sonar coverage

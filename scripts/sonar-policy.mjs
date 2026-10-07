@@ -1,4 +1,3 @@
-import { appendFileSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 // No credentials are needed to decide whether analysis was requested.
@@ -29,9 +28,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     eventName: process.env.GITHUB_EVENT_NAME,
     ref: process.env.GITHUB_REF,
     actor: process.env.GITHUB_ACTOR,
-    event: JSON.parse(readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')),
+    event: JSON.parse(process.env.GITHUB_EVENT_JSON),
     runSonar: process.env.RUN_SONAR,
   });
-  appendFileSync(process.env.GITHUB_OUTPUT, `eligible=${result.eligible}\n`);
-  appendFileSync(process.env.GITHUB_STEP_SUMMARY, `Sonar: **${result.eligible ? 'eligible' : 'skipped'}** — ${result.reason}.\n`);
+  // The workflow owns its file-command destinations; this CLI only emits data.
+  console.log(`eligible=${result.eligible}`);
+  console.log(`reason=${result.reason}`);
 }
