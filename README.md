@@ -19,6 +19,9 @@ The interface is designed for GitHub Pages: no server, database, API keys, or ru
 
 ## Run locally
 
+See [CI and selective Sonar analysis](docs/ci.md) for workflow ownership,
+data/security checks, coverage, and Sonar setup during modernization.
+
 ```bash
 npm install
 npm run dev

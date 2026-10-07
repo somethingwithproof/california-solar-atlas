@@ -1,0 +1,157 @@
+name: Sonar analysis
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      run_sonar:
+        description: Run analysis on the selected trusted repository branch (ENABLE_SONAR must be true)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sonar-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eligibility:
+    name: Sonar eligibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      eligible: ${{ steps.policy.outputs.eligible }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+      - id: policy
+        name: Explain execution policy
+        env:
+          ENABLE_SONAR: ${{ vars.ENABLE_SONAR }}
+          RUN_SONAR: ${{ inputs.run_sonar }}
+          GITHUB_EVENT_JSON: ${{ toJSON(github.event) }}
+        run: |
+          node scripts/sonar-policy.mjs >> "$GITHUB_OUTPUT"
+      - name: Summarize execution policy
+        env:
+          ELIGIBLE: ${{ steps.policy.outputs.eligible }}
+          REASON: ${{ steps.policy.outputs.reason }}
+        run: printf 'Sonar eligible=%s — %s.\n' "$ELIGIBLE" "$REASON" >> "$GITHUB_STEP_SUMMARY"
+
+  coverage:
+    name: Sonar coverage
+    needs: eligibility
+    if: needs.eligibility.outputs.eligible == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:coverage
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sonar-lcov
+          path: coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 7
+
+  analysis:
+    name: Sonar Quality Gate
+    environment: sonar
+    needs: [eligibility, coverage]
+    # Independent guard: a PR-controlled policy script cannot grant fork access.
+    if: >-
+      !cancelled() &&
+      needs.eligibility.outputs.eligible == 'true' &&
+      vars.ENABLE_SONAR == 'true' &&
+      github.actor != 'dependabot[bot]' &&
+      (github.event_name != 'pull_request' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validate requested configuration
+        env:
+          COVERAGE_RESULT: ${{ needs.coverage.result }}
+          HAS_SONAR_TOKEN: ${{ secrets.SONAR_TOKEN != '' }}
+          SONAR_PLATFORM: ${{ vars.SONAR_PLATFORM || 'cloud' }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+        run: |
+          if [ "$COVERAGE_RESULT" != success ]; then
+            echo '::error::Requested Sonar analysis cannot proceed: coverage generation failed or was skipped.'
+            exit 1
+          fi
+          if [ "$HAS_SONAR_TOKEN" != true ]; then
+            echo '::error::Sonar was requested but SONAR_TOKEN is not configured.'
+            exit 1
+          fi
+          case "$SONAR_PLATFORM" in
+            cloud) ;;
+            server)
+              if [ -z "$SONAR_HOST_URL" ] || [ -z "$SONAR_PROJECT_KEY" ]; then
+                echo '::error::Server analysis requires SONAR_HOST_URL and SONAR_PROJECT_KEY variables.'
+                exit 1
+              fi
+              ;;
+            *) echo '::error::SONAR_PLATFORM must be cloud or server.'; exit 1 ;;
+          esac
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: sonar-lcov
+          path: coverage
+      - name: Configure scanner identity
+        env:
+          SONAR_PLATFORM: ${{ vars.SONAR_PLATFORM || 'cloud' }}
+          SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_ORGANIZATION: ${{ vars.SONAR_ORGANIZATION }}
+        run: |
+          python - <<'PY'
+          import os, re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          config = Path('sonar-project.properties').read_text()
+          platform = os.environ['SONAR_PLATFORM']
+          host = os.environ['SONAR_HOST_URL'] or 'https://sonarcloud.io'
+          url = urlsplit(host)
+          if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment or any(c.isspace() for c in host):
+              raise SystemExit('SONAR_HOST_URL must be an HTTPS URL without credentials, query, fragment or whitespace')
+          values = {'sonar.host.url': host}
+          for key, variable in [('sonar.projectKey', 'SONAR_PROJECT_KEY'), ('sonar.organization', 'SONAR_ORGANIZATION')]:
+              value = os.environ[variable]
+              if value:
+                  if not re.fullmatch(r'[A-Za-z0-9_.:-]+', value, flags=re.ASCII):
+                      raise SystemExit(f'Invalid {variable}')
+                  values[key] = value
+          if platform == 'server':
+              config = '\n'.join(line for line in config.splitlines() if not line.startswith('sonar.organization=')) + '\n'
+              values.pop('sonar.organization', None)
+          Path('.sonar-ci.properties').write_text(config + '\n' + '\n'.join(f'{key}={value}' for key, value in values.items()) + '\n')
+          PY
+      # Fresh runner: repository tests/install scripts never run beside SONAR_TOKEN.
+      - name: Analyze and check quality gate
+        uses: SonarSource/sonarqube-scan-action@d209202bc7d53ff1cc128f7f907dac145c9d6ae9 # v8.3.0
+        with:
+          args: -Dproject.settings=.sonar-ci.properties
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

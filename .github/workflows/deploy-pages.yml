@@ -9,10 +9,12 @@ permissions: {}
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
+    name: build
+    timeout-minutes: 15
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -34,9 +36,11 @@ jobs:
         with:
           path: dist
   deploy:
+    name: deploy
+    timeout-minutes: 10
     permissions:
-      pages: write
-      id-token: write
+      pages: write # Publish the validated Pages artifact.
+      id-token: write # Authenticate the Pages deployment with OIDC.
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
