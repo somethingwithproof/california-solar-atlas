@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // The metric layer every comparison surface shares: the map, the rankings, and the
 // comparison cards. Kept out of main.js so it can be exercised without a DOM, because a
 // fault here blanks whole sections rather than showing a wrong number.

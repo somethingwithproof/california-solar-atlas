@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+# SPDX-License-Identifier: MIT
+
 """Build the publicly owned utility inputs: net-metered capacity and territory overlap.
 
 Two annual releases feed city-level POU attribution:

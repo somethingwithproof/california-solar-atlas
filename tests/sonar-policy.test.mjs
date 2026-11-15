@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';

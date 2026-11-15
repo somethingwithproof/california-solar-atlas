@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // Municipal utility attribution: decides which publicly owned utility capacity may be
 // credited to which city, and converts a reported AC figure to DC.
 //

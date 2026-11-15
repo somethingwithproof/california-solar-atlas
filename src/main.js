@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 import './styles.css';
 import { setMarkup } from './render.js';
 // Editorial reference list, not pipeline provenance. Bundled rather than published in

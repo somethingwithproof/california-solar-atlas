@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
