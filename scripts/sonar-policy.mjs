@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 import { pathToFileURL } from 'node:url';
 
 // No credentials are needed to decide whether analysis was requested.

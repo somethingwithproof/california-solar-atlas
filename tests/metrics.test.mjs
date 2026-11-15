@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // A fault in the metric layer blanks the map and the rankings rather than showing a
 // wrong number, so every metric is exercised here including the ones with no band.
 import assert from 'node:assert/strict';

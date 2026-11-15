@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+// SPDX-License-Identifier: MIT
+
 // The attribution rules decide published city capacity, and every way they can go wrong
 // is silent under-attribution rather than a crash. The live data exercises only the happy
 // path, so the guards are covered here instead.

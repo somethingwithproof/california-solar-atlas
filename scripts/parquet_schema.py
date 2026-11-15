@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Thomas Vincent <thomasvincent@gmail.com>
+# SPDX-License-Identifier: MIT
+
 """Versioned Arrow schemas for California Solar Atlas release tables."""
 
 from __future__ import annotations
