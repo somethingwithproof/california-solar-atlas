@@ -153,7 +153,7 @@ jobs:
           PY
       # Fresh runner: repository tests/install scripts never run beside SONAR_TOKEN.
       - name: Analyze and check quality gate
-        uses: SonarSource/sonarqube-scan-action@4d1dc0c91ee400dcf8a6dddf2f705ac36542e304 # v8.4.0
+        uses: SonarSource/sonarqube-scan-action@e805d875275f728fac1885b413934be6d7c63f65 # v8.4.1
         with:
           args: -Dproject.settings=.sonar-ci.properties
         env:
