@@ -3,6 +3,7 @@
 
 import './styles.css';
 import { setMarkup } from './render.js';
+import { detectLocale, getLocale, LOCALE_NAMES, setLocale, SUPPORTED_LOCALES, t } from './i18n.js';
 // Editorial reference list, not pipeline provenance. Bundled rather than published in
 // cities.json so the release payload keeps describing only what produced its figures.
 import referenceSources from '../data/reference-sources.json';
@@ -11,7 +12,7 @@ import { capacityFloor, format, generationMid, generationRange, integer, metricC
 const DATA_URL = `${import.meta.env.BASE_URL}data/cities.json`;
 const BOUNDARIES_URL = `${import.meta.env.BASE_URL}data/boundaries.json`;
 const app = document.querySelector('#app');
-const state = { data: null, boundaries: {}, city: null, county: null, compare: [], mapMetric: 'capacityMw', rankMetric: 'capacityMw' };
+const state = { data: null, boundaries: {}, city: null, county: null, compare: [], mapMetric: 'capacityMw', rankMetric: 'capacityMw', eventsBound: false };
 
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 const safeUrl = (value = '') => { try { const url = new URL(value); return url.protocol === 'https:' ? url.href : '#'; } catch { return '#'; } };
@@ -23,9 +24,17 @@ const solarShare = (city, deliveries = city.load?.deliveriesGwh) => deliveries ?
 const coverageStatus = (city) => ['reported', 'partial', 'unverified'].includes(city.coverage?.status) ? city.coverage.status : 'unverified';
 const zoneLabel = (city) => city.climateZone == null ? 'unassigned' : escapeHtml(city.climateZone);
 const yieldValue = (city, index) => escapeHtml(city.yieldRange?.[index] ?? '');
-const coverageCopy = { reported: 'IOU records found', partial: 'Partial utility coverage', unverified: 'Coverage unverified' };
-const coverageLabel = (status) => coverageCopy[status] || 'Coverage unknown';
+const coverageLabel = (status) => ({
+  reported: t('coverage.reported'),
+  partial: t('coverage.partial'),
+  unverified: t('coverage.unverified'),
+})[status] || t('coverage.unknown');
 const coverageTerm = (status) => ({ reported: 'coverageReported', partial: 'coveragePartial', unverified: 'coverageUnverified' })[status];
+const metricLabel = (metricKey) => t(`metric.${metricKey}`) || metricConfig[metricKey]?.label || metricKey;
+const languageOptions = () => {
+  const current = getLocale();
+  return SUPPORTED_LOCALES.map((code) => `<option value="${code}"${code === current ? ' selected' : ''}>${escapeHtml(LOCALE_NAMES[code])}</option>`).join('');
+};
 // Plain-English glossary. Every phrase here is jargon a first-time reader would not
 // guess; the tooltip explains it without sending them to the methodology section.
 const glossary = {
@@ -55,57 +64,59 @@ const term = (label, key) => `<span class="term" tabindex="0" role="note" aria-l
 function shell(meta) {
   setMarkup(app, `
     <header class="site-header">
-      <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="California Solar Atlas home"><span class="brand-mark" aria-hidden="true"><span></span></span><span>California Solar Atlas</span></a>
-      <nav aria-label="Primary"><a href="#explore">Explore</a><a href="#counties">Counties</a><a href="#map">Map</a><a href="#rankings">Rankings</a><a href="#compare">Compare</a><a href="#methodology">Methodology</a></nav>
-      <div class="header-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer" aria-label="View California Solar Atlas on GitHub"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2.3a9.9 9.9 0 0 0-3.1 19.3c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.9.1-.6.3-1.1.6-1.4-2.3-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.6-4.6 4.9.4.3.7 1 .7 2v3c0 .3.2.6.7.5A9.9 9.9 0 0 0 12 2.3Z"/></svg><span>GitHub</span></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer" aria-label="Report an issue on GitHub"><svg class="issue-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v6M12 17h.01"/></svg><span>Report an issue</span><b aria-hidden="true">↗</b></a></div>
-      <button class="limits-button" type="button" data-action="limits"><span aria-hidden="true">?</span> Data limitations</button>
+      <a class="brand" href="${import.meta.env.BASE_URL}" aria-label="${escapeHtml(t('app.title'))}"><span class="brand-mark" aria-hidden="true"><span></span></span><span>${escapeHtml(t('app.title'))}</span></a>
+      <nav aria-label="${escapeHtml(t('nav.primary'))}"><a href="#explore">${escapeHtml(t('nav.explore'))}</a><a href="#counties">${escapeHtml(t('nav.counties'))}</a><a href="#map">${escapeHtml(t('nav.map'))}</a><a href="#rankings">${escapeHtml(t('nav.rankings'))}</a><a href="#compare">${escapeHtml(t('nav.compare'))}</a><a href="#methodology">${escapeHtml(t('nav.methodology'))}</a></nav>
+      <div class="header-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer" aria-label="View California Solar Atlas on GitHub"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2.3a9.9 9.9 0 0 0-3.1 19.3c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.9.1-.6.3-1.1.6-1.4-2.3-.3-4.6-1.1-4.6-4.9 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.8-2.3 4.6-4.6 4.9.4.3.7 1 .7 2v3c0 .3.2.6.7.5A9.9 9.9 0 0 0 12 2.3Z"/></svg><span>${escapeHtml(t('header.github'))}</span></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer" aria-label="${escapeHtml(t('header.report_issue'))}"><svg class="issue-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7.5v6M12 17h.01"/></svg><span>${escapeHtml(t('header.report_issue'))}</span><b aria-hidden="true">↗</b></a></div>
+      <label class="sr-only" for="lang-select">${escapeHtml(t('app.language'))}</label>
+      <select id="lang-select" class="lang-select" aria-label="${escapeHtml(t('app.language'))}">${languageOptions()}</select>
+      <button class="limits-button" type="button" data-action="limits"><span aria-hidden="true">?</span> ${escapeHtml(t('header.data_limitations'))}</button>
     </header>
     <main id="main">
       <section class="hero" id="explore">
-        <div class="eyebrow"><span></span> Reported distributed solar across California</div>
-        <h1>Distributed solar growth,<br><em>city by city.</em></h1>
+        <div class="eyebrow"><span></span> ${escapeHtml(t('hero.eyebrow'))}</div>
+        <h1>${escapeHtml(t('hero.title_line1'))}<br><em>${escapeHtml(t('hero.title_line2'))}</em></h1>
         <p class="hero-copy">Search every incorporated California city. Compare reported capacity, climate-adjusted generation, growth, storage, and data confidence without filling gaps with county estimates. This atlas covers ${term('distributed solar', 'distributed')} only: rooftop and onsite systems. Utility-scale solar farms, which are roughly half of California's solar, are not counted here.</p>
         <div class="search-wrap" data-search="primary">
-          <label for="city-search">Find a California city</label>
-          <div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="city-search" type="search" role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="Try Chula Vista, Fresno, or Eureka" aria-controls="search-results" aria-expanded="false"><kbd>⌘ K</kbd></div>
+          <label for="city-search">${escapeHtml(t('hero.search_label'))}</label>
+          <div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="city-search" type="search" role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="${escapeHtml(t('hero.search_placeholder'))}" aria-controls="search-results" aria-expanded="false"><kbd>⌘ K</kbd></div>
           <div id="search-results" class="search-results" role="listbox" hidden></div>
         </div>
-        <div class="hero-meta"><span><strong>${integer.format(meta.cityCount)}</strong> incorporated cities</span><span><strong>${format.format(meta.totalCapacityMw / 1000)} GW</strong> distributed, matched to cities</span><span>Data through <strong>${escapeHtml(meta.dataThrough)}</strong></span></div>
+        <div class="hero-meta"><span>${escapeHtml(t('hero.meta_cities', { count: integer.format(meta.cityCount) }))}</span><span>${escapeHtml(t('hero.meta_capacity', { gw: format.format(meta.totalCapacityMw / 1000) }))}</span><span>${escapeHtml(t('hero.meta_through', { date: meta.dataThrough }))}</span></div>
       </section>
       <section id="city-view" class="city-view" aria-live="polite"></section>
       <section id="counties" class="county-section section-pad">
-        <div class="section-heading"><div><div class="eyebrow"><span></span> County totals</div><h2>Explore by county.</h2></div><p>Current county totals use DG Stats' Service County field directly, so they include incorporated and unincorporated IOU service locations. A separate CEC benchmark provides older all-utility context.</p></div>
-        <div class="map-toolbar"><label for="county-select">Choose a county</label><select id="county-select">${state.data.counties.map((county) => `<option value="${escapeHtml(county.slug)}">${escapeHtml(county.name)} County</option>`).join('')}</select></div>
+        <div class="section-heading"><div><div class="eyebrow"><span></span> ${escapeHtml(t('counties.eyebrow'))}</div><h2>${escapeHtml(t('counties.heading'))}</h2></div><p>Current county totals use DG Stats' Service County field directly, so they include incorporated and unincorporated IOU service locations. A separate CEC benchmark provides older all-utility context.</p></div>
+        <div class="map-toolbar"><label for="county-select">${escapeHtml(t('counties.choose'))}</label><select id="county-select">${state.data.counties.map((county) => `<option value="${escapeHtml(county.slug)}">${escapeHtml(county.name)} County</option>`).join('')}</select></div>
         <div id="county-view" aria-live="polite"></div>
       </section>
       <section id="map" class="map-section section-pad">
-        <div class="section-heading"><div><div class="eyebrow"><span></span> Statewide view</div><h2>See the pattern.</h2></div><p>Official incorporated-city polygons are shaded by the selected metric, including attributed municipal capacity. Values still use utility service-city strings, so the map visualizes—but does not repair—the mailing-boundary mismatch.</p></div>
-        <div class="map-toolbar"><label for="map-metric">Shade cities by</label><select id="map-metric">${metricOptions(state.mapMetric)}</select><span class="map-legend"><i></i> Lower <i></i> Higher</span></div>
+        <div class="section-heading"><div><div class="eyebrow"><span></span> ${escapeHtml(t('map.eyebrow'))}</div><h2>${escapeHtml(t('map.heading'))}</h2></div><p>Official incorporated-city polygons are shaded by the selected metric, including attributed municipal capacity. Values still use utility service-city strings, so the map visualizes—but does not repair—the mailing-boundary mismatch.</p></div>
+        <div class="map-toolbar"><label for="map-metric">${escapeHtml(t('map.shade_by'))}</label><select id="map-metric">${metricOptions(state.mapMetric)}</select><span class="map-legend"><i></i> ${escapeHtml(t('map.lower'))} <i></i> ${escapeHtml(t('map.higher'))}</span></div>
         <div class="map-layout"><div id="solar-map" class="solar-map"></div><aside id="map-summary" class="map-summary"></aside></div>
       </section>
       <section id="rankings" class="rankings section-pad">
-        <div class="section-heading"><div><div class="eyebrow"><span></span> Comparable measures</div><h2>City rankings.</h2></div><p>Rank reported totals and approval-date growth. Cities served by a municipal utility carry attributed capacity but stay marked partial, so clear the coverage filter below to see them. Per-resident ranking is intentionally withheld because service-city capacity and legal-boundary population are incompatible geographies.</p></div>
-        <div class="rank-toolbar"><label for="rank-metric">Rank by</label><select id="rank-metric">${metricOptions(state.rankMetric)}</select><label class="toggle"><input id="minimum-population" type="checkbox" checked><span></span> Population 10,000+</label><label class="toggle"><input id="exclude-geography-risk" type="checkbox" checked><span></span> Exclude geography risk or unknown</label><label class="toggle"><input id="exclude-partial" type="checkbox" checked><span></span> Exclude partial coverage</label></div>
+        <div class="section-heading"><div><div class="eyebrow"><span></span> ${escapeHtml(t('rankings.eyebrow'))}</div><h2>${escapeHtml(t('rankings.heading'))}</h2></div><p>Rank reported totals and approval-date growth. Cities served by a municipal utility carry attributed capacity but stay marked partial, so clear the coverage filter below to see them. Per-resident ranking is intentionally withheld because service-city capacity and legal-boundary population are incompatible geographies.</p></div>
+        <div class="rank-toolbar"><label for="rank-metric">${escapeHtml(t('rankings.rank_by'))}</label><select id="rank-metric">${metricOptions(state.rankMetric)}</select><label class="toggle"><input id="minimum-population" type="checkbox" checked><span></span> ${escapeHtml(t('rankings.min_pop'))}</label><label class="toggle"><input id="exclude-geography-risk" type="checkbox" checked><span></span> ${escapeHtml(t('rankings.exclude_geo_risk'))}</label><label class="toggle"><input id="exclude-partial" type="checkbox" checked><span></span> ${escapeHtml(t('rankings.exclude_partial'))}</label></div>
         <div id="ranking-table" class="ranking-table"></div>
       </section>
       <section id="compare" class="compare section-pad">
-        <div class="section-heading"><div><div class="eyebrow"><span></span> Side by side</div><h2>Compare cities.</h2></div><p>Add up to four cities. Every comparison keeps the same capacity basis, degradation assumption, and location-specific yield method, and includes attributed municipal capacity where it exists.</p></div>
-        <div class="compare-search search-wrap" data-search="compare"><label for="compare-search">Add a city</label><div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="compare-search" type="search" role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="Search to add a city" aria-controls="compare-results" aria-expanded="false"><span class="compare-count">0 / 4</span></div><div id="compare-results" class="search-results" role="listbox" hidden></div></div>
+        <div class="section-heading"><div><div class="eyebrow"><span></span> ${escapeHtml(t('compare.eyebrow'))}</div><h2>${escapeHtml(t('compare.heading'))}</h2></div><p>Add up to four cities. Every comparison keeps the same capacity basis, degradation assumption, and location-specific yield method, and includes attributed municipal capacity where it exists.</p></div>
+        <div class="compare-search search-wrap" data-search="compare"><label for="compare-search">${escapeHtml(t('compare.add_city'))}</label><div class="search-control"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m21 21-4.35-4.35m2.35-5.15A7.5 7.5 0 1 1 4 11.5a7.5 7.5 0 0 1 15 0Z"/></svg><input id="compare-search" type="search" role="combobox" aria-autocomplete="list" autocomplete="off" placeholder="${escapeHtml(t('compare.placeholder'))}" aria-controls="compare-results" aria-expanded="false"><span class="compare-count">0 / 4</span></div><div id="compare-results" class="search-results" role="listbox" hidden></div></div>
         <div id="compare-view"></div>
       </section>
       <section class="method section-pad" id="methodology">
-        <div><div class="eyebrow"><span></span> Transparent by design</div><h2>One result,<br>four evidence layers.</h2></div>
+        <div><div class="eyebrow"><span></span> ${escapeHtml(t('method.eyebrow'))}</div><h2>${escapeHtml(t('method.heading_line1'))}<br>${escapeHtml(t('method.heading_line2'))}</h2></div>
         <div class="method-grid">
-          <article><span>01</span><h3>Reported capacity</h3><p>Positive System Size DC values from PG&amp;E, SCE, and SDG&amp;E project-site files; PTC and CEC-AC values are never substituted for them. Attributed municipal capacity is added on top from EIA-861 and converted to DC across a disclosed ratio band, which is why those cities show a range.</p></article>
+          <article><span>01</span><h3>${escapeHtml(t('city.reported_capacity'))}</h3><p>Positive System Size DC values from PG&amp;E, SCE, and SDG&amp;E project-site files; PTC and CEC-AC values are never substituted for them. Attributed municipal capacity is added on top from EIA-861 and converted to DC across a disclosed ratio band, which is why those cities show a range.</p></article>
           <article><span>02</span><h3>Location-specific generation</h3><p>CEC climate-zone fleet yields span 1,250–1,750 kWh/kW-DC-year. Each vintage loses 0.5% of output per year.</p></article>
           <article><span>03</span><h3>Gross electricity use</h3><p>Shown only with a documented city load source. Modeled self-generation is restored to net grid deliveries.</p></article>
           <article><span>04</span><h3>Quality and coverage</h3><p>Mailing geography, municipal-utility gaps, and approval-date history are surfaced alongside every result.</p></article>
         </div>
         <p class="formula"><span>Solar share</span> = degradation-adjusted gross generation ÷ (grid deliveries + degradation-adjusted gross generation)</p>
       </section>
-      <section class="sources section-pad"><div><div class="eyebrow"><span></span> Provenance</div><h2>Sources you can inspect.</h2></div><div>${sourceLinks(meta.sources)}<div class="sources-reference"><h3>Coverage this build still does not include</h3><p>Nothing above or below this line is mixed together. The sources above produced the figures on this page. These below did not; they are published so the remaining gaps stay checkable.</p></div>${sourceLinks(referenceSources.sources)}</div></section>
+      <section class="sources section-pad"><div><div class="eyebrow"><span></span> ${escapeHtml(t('sources.eyebrow'))}</div><h2>${escapeHtml(t('sources.heading'))}</h2></div><div>${sourceLinks(meta.sources)}<div class="sources-reference"><h3>Coverage this build still does not include</h3><p>Nothing above or below this line is mixed together. The sources above produced the figures on this page. These below did not; they are published so the remaining gaps stay checkable.</p></div>${sourceLinks(referenceSources.sources)}</div></section>
     </main>
-    <footer><div><strong>California Solar Atlas</strong><span>Open data · Open methodology · MIT licensed</span></div><div class="footer-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer">GitHub <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/releases" target="_blank" rel="noreferrer">Data releases <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer">Report an issue <b aria-hidden="true">↗</b></a><button type="button" data-action="limits">Data limitations</button></div></footer>
+    <footer><div><strong>${escapeHtml(t('app.title'))}</strong><span>${escapeHtml(t('footer.tagline'))}</span></div><div class="footer-links"><a href="https://github.com/somethingwithproof/california-solar-atlas" target="_blank" rel="noreferrer">${escapeHtml(t('header.github'))} <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/releases" target="_blank" rel="noreferrer">${escapeHtml(t('footer.data_releases'))} <b aria-hidden="true">↗</b></a><a href="https://github.com/somethingwithproof/california-solar-atlas/issues/new" target="_blank" rel="noreferrer">${escapeHtml(t('header.report_issue'))} <b aria-hidden="true">↗</b></a><button type="button" data-action="limits">${escapeHtml(t('header.data_limitations'))}</button></div></footer>
     ${limitsDialog(meta)}
     <div id="toast" class="toast" role="status" aria-live="polite"></div>`);
 }
@@ -115,7 +126,7 @@ function sourceLinks(sources) {
 }
 
 function metricOptions(selected) {
-  return Object.entries(metricConfig).map(([value, config]) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${config.label}</option>`).join('');
+  return Object.keys(metricConfig).map((value) => `<option value="${value}" ${value === selected ? 'selected' : ''}>${escapeHtml(metricLabel(value))}</option>`).join('');
 }
 
 function limitsDialog(meta) {
@@ -123,7 +134,7 @@ function limitsDialog(meta) {
   const municipalCoverage = pou
     ? `Municipal capacity is added for ${integer.format(pou.mergedCities)} cities from ${escapeHtml(pou.year)} Form EIA-861 (${format.format(pou.mergedRangeMwDc.low)}–${format.format(pou.mergedRangeMwDc.high)} MW-DC) where the utility's service territory lies inside the city. A further ${format.format(pou.unattributedRangeMwDc.low)}–${format.format(pou.unattributedRangeMwDc.high)} MW-DC across ${integer.format(pou.unattributedUtilities)} utilities, largest being ${escapeHtml(pou.unattributedNames.slice(0, 2).join(' and '))}, serves several cities at once and is not attributed to any of them.`
     : 'LADWP, SMUD, and other public utilities are absent from these files, so affected city totals are lower bounds.';
-  return `<dialog class="limits-dialog" aria-labelledby="limits-title"><form method="dialog"><button class="dialog-close" aria-label="Close data limitations">×</button></form><div class="eyebrow"><span></span> Data limitations</div><h2 id="limits-title">What this data can—and cannot—tell you.</h2><div class="limits-list">
+  return `<dialog class="limits-dialog" aria-labelledby="limits-title"><form method="dialog"><button class="dialog-close" aria-label="${escapeHtml(t('limits.close'))}">×</button></form><div class="eyebrow"><span></span> ${escapeHtml(t('header.data_limitations'))}</div><h2 id="limits-title">${escapeHtml(t('limits.title'))}</h2><div class="limits-list">
     <article><b>Reported capacity is not production.</b><p>DC nameplate comes from interconnected project records. Generation uses a CEC climate-zone fleet range and 0.5% annual degradation, not production meters.</p></article>
     <article><b>Service city is mailing geography.</b><p>The May 2026 public Project Sites files contain city and ZIP but no project coordinates or street addresses. Totals cannot yet be spatially joined to municipal polygons. Cities where residential project sites exceed 35% of legal-boundary housing units are flagged as likely mailing inflation and excluded from rankings by default; this is a screening heuristic, not a corrected boundary total.</p></article>
     <article><b>County geography is source-reported.</b><p>County views aggregate the source's Service County field and include unincorporated records. Their current totals still cover only PG&amp;E, SCE, and SDG&amp;E. A separate CEC 2024 all-utility, MW-AC benchmark covers systems 1 MW and smaller; it is not additive to the newer MW-DC inventory. County generation uses only the current IOU inventory and a statewide 1,250–1,750 kWh/kW-DC yield envelope. City views omit ${integer.format(meta.unmatchedProjects)} project rows (${format.format(meta.unmatchedCapacityMw)} MW-DC) whose service-city strings do not match an incorporated city. A further ${integer.format(meta.unresolvedCountyProjects)} rows (${format.format(meta.unresolvedCountyCapacityMw)} MW-DC) carry a Service County this build does not recognize and are dropped from both the county and city totals.</p></article>
@@ -133,7 +144,7 @@ function limitsDialog(meta) {
     <article><b>Storage energy is withheld.</b><p>The source's Storage Capacity (kWh) field contains internally inconsistent scales when compared with storage kW. Linked-site counts are shown, but aggregate MWh is not published; this build also excludes ${integer.format(meta.storageInvalidValues)} negative or nonnumeric storage values.</p></article>
     <article><b>City electricity use is scarce.</b><p>A solar-share percentage appears only where a documented local load source is onboarded. County consumption is never substituted.</p></article>
     <article><b>The inventory has opposing errors.</b><p>Behind-the-fence systems can be absent while incomplete decommissioning can leave retired systems listed. Treat capacity as a reported inventory, not an audited physical census.</p></article>
-  </div><p class="dialog-note">Use these results for community exploration—not billing, engineering, financial, or regulatory decisions.</p><form method="dialog"><button class="dialog-action">I understand</button></form></dialog>`;
+  </div><p class="dialog-note">Use these results for community exploration—not billing, engineering, financial, or regulatory decisions.</p><form method="dialog"><button class="dialog-action">${escapeHtml(t('limits.confirm'))}</button></form></dialog>`;
 }
 
 function setupSearch(root, mode) {
@@ -182,7 +193,7 @@ function capacityBasisNote(city) {
 
 function capacityHeadline(city) {
   const pou = city.pouCapacity;
-  if (!pou) return `<strong>${format.format(city.capacityMw)} <small>${term('MW-DC', 'mwdc')}</small></strong><p>${integer.format(city.projects)} current project sites</p>`;
+  if (!pou) return `<strong>${format.format(city.capacityMw)} <small>${term('MW-DC', 'mwdc')}</small></strong><p>${escapeHtml(t('city.current_sites', { count: integer.format(city.projects) }))}</p>`;
   const range = city.totalCapacityRangeMwDc;
   // A DC-reported municipal figure needs no conversion, so it prints as one number.
   const value = range.low === range.high ? format.format(range.low) : `${format.format(range.low)}–${format.format(range.high)}`;
@@ -209,8 +220,8 @@ function qualityBadge(city, plain = false) {
 }
 
 function geographyBadge(city, plain = false) {
-  if (city.geographyRisk === 'likely-mailing-inflation') return `<span class="status partial"><i></i>${plain ? 'Geography risk' : term('Geography risk', 'geographyRisk')}</span>`;
-  if (city.geographyRisk === 'unknown') return '<span class="status unverified"><i></i>Geography unknown</span>';
+  if (city.geographyRisk === 'likely-mailing-inflation') return `<span class="status partial"><i></i>${plain ? escapeHtml(t('badge.geography_risk')) : term(t('badge.geography_risk'), 'geographyRisk')}</span>`;
+  if (city.geographyRisk === 'unknown') return `<span class="status unverified"><i></i>${escapeHtml(t('badge.geography_unknown'))}</span>`;
   return '';
 }
 
@@ -255,7 +266,7 @@ function cityTrendPanel(city) {
   const undatedNote = city.undatedProjects
     ? `<p>${integer.format(city.undatedProjects)} projects (${format.format(city.undatedCapacityMw)} MW-DC) lack a parseable approval year and are excluded from this chart and growth rate.</p>`
     : '';
-  return `<article class="trend-panel"><div class="panel-head"><div><span>Capacity growth</span><h3>Cumulative dated MW-DC by approval date</h3>${city.pouCapacity ? '<small class="panel-scope">IOU records only. Municipal capacity has no install years, so it is absent from this chart and the growth figure.</small>' : ''}</div><div class="panel-actions"><strong>${growth} <small>5 yr</small></strong><button data-action="chart">Download SVG</button></div></div>${sparkline(city)}${undatedNote}</article>`;
+  return `<article class="trend-panel"><div class="panel-head"><div><span>${escapeHtml(t('city.capacity_growth'))}</span><h3>${escapeHtml(t('city.cumulative_mw'))}</h3>${city.pouCapacity ? '<small class="panel-scope">IOU records only. Municipal capacity has no install years, so it is absent from this chart and the growth figure.</small>' : ''}</div><div class="panel-actions"><strong>${growth} <small>5 yr</small></strong><button data-action="chart">${escapeHtml(t('city.download_svg'))}</button></div></div>${sparkline(city)}${undatedNote}</article>`;
 }
 
 function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
@@ -266,12 +277,12 @@ function selectCity(city, { scroll = true, historyMode = 'push' } = {}) {
   const shareLow = city.load ? generation.low / (city.load.highDeliveriesGwh + generation.low) * 100 : null;
   const shareHigh = city.load ? generation.high / (city.load.lowDeliveriesGwh + generation.high) * 100 : null;
   const view = document.querySelector('#city-view');
-  setMarkup(view, `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · ${term('CEC climate zone', 'climateZone')} ${zoneLabel(city)}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}${geographyBadge(city)}<button data-action="share">Share</button><button data-action="csv">Download CSV</button></div></div>
-    <div class="coverage-note ${status}"><strong>${status === 'partial' ? 'Treat this capacity as a lower bound.' : 'Coverage note'}</strong><span>${escapeHtml(city.coverage.note)}</span><button data-action="limits" aria-label="Read all data limitations">?</button></div>
+  setMarkup(view, `<div class="city-heading"><div><div class="eyebrow"><span></span>${escapeHtml(city.county)} County · ${term('CEC climate zone', 'climateZone')} ${zoneLabel(city)}</div><h2>${escapeHtml(city.name)}</h2></div><div class="city-actions">${qualityBadge(city)}${geographyBadge(city)}<button data-action="share">${escapeHtml(t('city.share'))}</button><button data-action="csv">${escapeHtml(t('city.download_csv'))}</button></div></div>
+    <div class="coverage-note ${status}"><strong>${escapeHtml(status === 'partial' ? t('coverage.lower_bound') : t('coverage.note'))}</strong><span>${escapeHtml(city.coverage.note)}</span><button data-action="limits" aria-label="${escapeHtml(t('header.data_limitations'))}">?</button></div>
     ${municipalNote(city)}
-    <div class="metrics four"><article><span>Reported capacity</span>${capacityHeadline(city)}</article><article><span>Climate-adjusted generation</span>${generationHeadline(city)}</article><article><span>Average reported system</span><strong>${format.format(city.averageSystemKw)} <small>kW-DC</small></strong><p>Service-city aggregate; not a household adoption rate</p></article><article><span>Share of city electricity use</span>${share == null ? '<strong class="not-available">Not available</strong><p>No verified city load denominator</p>' : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
-    <div class="detail-grid">${cityTrendPanel(city)}<aside class="read-panel"><span>Generation uncertainty</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${format.format((city.totalGenerationRangeGwh || city.generationGwh).low)}</b><b>${format.format((city.totalGenerationRangeGwh || city.generationGwh).high)} GWh</b></div><p>Zone ${zoneLabel(city)} uses ${yieldValue(city, 0)}–${yieldValue(city, 1)} kWh/kW-DC-year. Effective capacity spans ${format.format((city.totalEffectiveCapacityRangeMw || city.effectiveCapacityRangeMw).low)}–${format.format((city.totalEffectiveCapacityRangeMw || city.effectiveCapacityRangeMw).high)} MW after degradation${city.undatedProjects ? ' and unknown-date sensitivity' : ''}. Zone assignment: ${escapeHtml(city.climateZoneMethod.replaceAll('-', ' '))}.</p></aside></div>
-    <div class="attributes"><article><div class="panel-head"><div><span>Customer mix</span><h3>Capacity by sector</h3>${city.pouCapacity ? '<small class="panel-scope">IOU records only; sectors total the IOU inventory, not the combined figure above.</small>' : ''}</div></div>${sectorRows(city)}</article><article><div class="panel-head"><div><span>System profile</span><h3>What is connected</h3></div></div><dl><div><dt>Average system${city.pouCapacity ? ' (IOU only)' : ''}</dt><dd>${format.format(city.averageSystemKw)} kW-DC</dd></div><div><dt>${term('Storage-linked sites', 'storageLinked')}</dt><dd>${storageSiteSummary(city)}</dd></div><div><dt>Storage energy</dt><dd>Withheld · source units inconsistent</dd></div><div><dt>Housing diagnostic</dt><dd>${city.residentialSiteHousingPct == null ? 'Unavailable' : `${format.format(city.residentialSiteHousingPct)}% residential sites / housing units`}</dd></div><div><dt>Source utilities</dt><dd>${city.utilities.length ? city.utilities.map(escapeHtml).join(', ') : 'None matched'}</dd></div></dl></article></div>
+    <div class="metrics four"><article><span>${escapeHtml(t('city.reported_capacity'))}</span>${capacityHeadline(city)}</article><article><span>${escapeHtml(t('city.climate_generation'))}</span>${generationHeadline(city)}</article><article><span>${escapeHtml(t('city.avg_system'))}</span><strong>${format.format(city.averageSystemKw)} <small>kW-DC</small></strong><p>Service-city aggregate; not a household adoption rate</p></article><article><span>${escapeHtml(t('city.solar_share'))}</span>${share == null ? `<strong class="not-available">${escapeHtml(t('city.not_available'))}</strong><p>${escapeHtml(t('city.no_load_denominator'))}</p>` : `<strong>≈ ${format.format(share)}<small>%</small></strong><p>Range ${format.format(shareLow)}–${format.format(shareHigh)}% · ${city.load.kind}</p>`}</article></div>
+    <div class="detail-grid">${cityTrendPanel(city)}<aside class="read-panel"><span>${escapeHtml(t('city.generation_uncertainty'))}</span><h3>Location and vintage now matter.</h3><div class="range-visual"><i></i><b>${format.format((city.totalGenerationRangeGwh || city.generationGwh).low)}</b><b>${format.format((city.totalGenerationRangeGwh || city.generationGwh).high)} GWh</b></div><p>Zone ${zoneLabel(city)} uses ${yieldValue(city, 0)}–${yieldValue(city, 1)} kWh/kW-DC-year. Effective capacity spans ${format.format((city.totalEffectiveCapacityRangeMw || city.effectiveCapacityRangeMw).low)}–${format.format((city.totalEffectiveCapacityRangeMw || city.effectiveCapacityRangeMw).high)} MW after degradation${city.undatedProjects ? ' and unknown-date sensitivity' : ''}. Zone assignment: ${escapeHtml(city.climateZoneMethod.replaceAll('-', ' '))}.</p></aside></div>
+    <div class="attributes"><article><div class="panel-head"><div><span>${escapeHtml(t('city.customer_mix'))}</span><h3>${escapeHtml(t('city.capacity_by_sector'))}</h3>${city.pouCapacity ? '<small class="panel-scope">IOU records only; sectors total the IOU inventory, not the combined figure above.</small>' : ''}</div></div>${sectorRows(city)}</article><article><div class="panel-head"><div><span>${escapeHtml(t('city.system_profile'))}</span><h3>${escapeHtml(t('city.what_is_connected'))}</h3></div></div><dl><div><dt>Average system${city.pouCapacity ? ' (IOU only)' : ''}</dt><dd>${format.format(city.averageSystemKw)} kW-DC</dd></div><div><dt>${term(t('city.storage_linked'), 'storageLinked')}</dt><dd>${storageSiteSummary(city)}</dd></div><div><dt>${escapeHtml(t('city.storage_energy'))}</dt><dd>${escapeHtml(t('city.storage_withheld'))}</dd></div><div><dt>${escapeHtml(t('city.housing_diagnostic'))}</dt><dd>${city.residentialSiteHousingPct == null ? escapeHtml(t('city.unavailable')) : `${format.format(city.residentialSiteHousingPct)}% residential sites / housing units`}</dd></div><div><dt>${escapeHtml(t('city.source_utilities'))}</dt><dd>${city.utilities.length ? city.utilities.map(escapeHtml).join(', ') : escapeHtml(t('city.none_matched'))}</dd></div></dl></article></div>
     <div class="provenance"><span>Geography</span><p>Utility service-city string (mailing geography), not a municipal polygon join.</p><span>Capacity basis</span><p>${capacityBasisNote(city)}</p><span>History quality</span><p>Application-approval-date proxy; PTO generally occurs later. Missing dates are kept out of the timeline and widen the generation range.</p>${loadSource(city)}</div>`);
   document.querySelector('#city-search').value = city.name;
   const url = cityUrl(city);
@@ -291,8 +302,8 @@ function renderCounty(county, { historyMode = 'none' } = {}) {
   const partialCityCount = county.partialCities;
   const partialSubject = partialCityCount === 1 ? 'city is' : 'cities are';
   const partialNote = partialCityCount ? ` ${integer.format(partialCityCount)} incorporated ${partialSubject} marked for partial utility coverage.` : '';
-  const memberRows = members.length ? members.map((city) => `<button data-city-id="${escapeHtml(city.id)}"><span>${escapeHtml(city.name)}</span><strong>${format.format(city.capacityMw)} MW-DC</strong>${geographyBadge(city, true) || qualityBadge(city, true)}</button>`).join('') : '<p class="compare-empty">No incorporated cities in this county.</p>';
-  setMarkup(document.querySelector('#county-view'), `<div class="county-title"><h3>${escapeHtml(county.name)} County</h3><button type="button" data-action="share-county">Share county</button></div><div class="metrics four county-metrics"><article><span>${term('IOU', 'iou')} reported capacity</span><strong>${format.format(county.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(county.projects)} project sites · incorporated and unincorporated</p></article><article><span>All-utility benchmark</span><strong>${format.format(county.allUtilityBenchmark.capacityMwAc)} <small>${term('MW-AC', 'mwac')}</small></strong><p>CEC 2024 · systems 1 MW and smaller · not additive</p></article><article><span>Broad generation estimate</span><strong>${format.format(county.generationGwh.low)}–${format.format(county.generationGwh.high)} <small>GWh/yr</small></strong><p>IOU inventory only; statewide yield envelope</p></article><article><span>Outside matched cities</span><strong>${format.format(county.outsideMatchedCitiesMw)} <small>MW-DC</small></strong><p>Unincorporated or unmatched service-city strings</p></article></div><div class="county-benchmark-note"><strong>Two different inventories.</strong> The ${format.format(county.capacityMw)} MW-DC value is the current PG&amp;E/SCE/SDG&amp;E project inventory. The <a href="${safeUrl(county.allUtilityBenchmark.sourceUrl)}" target="_blank" rel="noreferrer">CEC benchmark</a> is an older, AC-rated all-utility total. It improves coverage context but is never added to or substituted for the IOU total.${partialNote}</div><div class="detail-grid county-detail"><article class="trend-panel"><div class="panel-head"><div><span>Dated IOU capacity</span><h3>County MW-DC by approval year</h3></div></div>${sparkline({ capacityMw: county.capacityMw, timeline: county.timeline })}${countyUndatedNote}<p>${integer.format(county.storageProjects)} storage-linked project sites; aggregate energy capacity is withheld.</p></article><aside class="county-cities"><span>Incorporated-city subset</span><div>${memberRows}</div></aside></div>`);
+  const memberRows = members.length ? members.map((city) => `<button data-city-id="${escapeHtml(city.id)}"><span>${escapeHtml(city.name)}</span><strong>${format.format(city.capacityMw)} MW-DC</strong>${geographyBadge(city, true) || qualityBadge(city, true)}</button>`).join('') : `<p class="compare-empty">${escapeHtml(t('counties.no_cities'))}</p>`;
+  setMarkup(document.querySelector('#county-view'), `<div class="county-title"><h3>${escapeHtml(county.name)} County</h3><button type="button" data-action="share-county">${escapeHtml(t('counties.share'))}</button></div><div class="metrics four county-metrics"><article><span>${term('IOU', 'iou')} reported capacity</span><strong>${format.format(county.capacityMw)} <small>MW-DC</small></strong><p>${integer.format(county.projects)} project sites · incorporated and unincorporated</p></article><article><span>All-utility benchmark</span><strong>${format.format(county.allUtilityBenchmark.capacityMwAc)} <small>${term('MW-AC', 'mwac')}</small></strong><p>CEC 2024 · systems 1 MW and smaller · not additive</p></article><article><span>Broad generation estimate</span><strong>${format.format(county.generationGwh.low)}–${format.format(county.generationGwh.high)} <small>GWh/yr</small></strong><p>IOU inventory only; statewide yield envelope</p></article><article><span>Outside matched cities</span><strong>${format.format(county.outsideMatchedCitiesMw)} <small>MW-DC</small></strong><p>Unincorporated or unmatched service-city strings</p></article></div><div class="county-benchmark-note"><strong>Two different inventories.</strong> The ${format.format(county.capacityMw)} MW-DC value is the current PG&amp;E/SCE/SDG&amp;E project inventory. The <a href="${safeUrl(county.allUtilityBenchmark.sourceUrl)}" target="_blank" rel="noreferrer">CEC benchmark</a> is an older, AC-rated all-utility total. It improves coverage context but is never added to or substituted for the IOU total.${partialNote}</div><div class="detail-grid county-detail"><article class="trend-panel"><div class="panel-head"><div><span>Dated IOU capacity</span><h3>County MW-DC by approval year</h3></div></div>${sparkline({ capacityMw: county.capacityMw, timeline: county.timeline })}${countyUndatedNote}<p>${integer.format(county.storageProjects)} storage-linked project sites; aggregate energy capacity is withheld.</p></article><aside class="county-cities"><span>Incorporated-city subset</span><div>${memberRows}</div></aside></div>`);
   if (historyMode !== 'none') history[`${historyMode}State`]({ county: county.slug }, '', countyUrl(county));
 }
 
@@ -316,17 +327,18 @@ function renderMap() {
 
 function renderRankings() {
   const config = metricConfig[state.rankMetric];
+  const label = metricLabel(state.rankMetric);
   const excludePartial = document.querySelector('#exclude-partial')?.checked;
   const excludeGeographyRisk = document.querySelector('#exclude-geography-risk')?.checked;
   const minimumPopulation = document.querySelector('#minimum-population')?.checked;
   const ranked = state.data.cities.filter((city) => Number.isFinite(config.value(city)) && (!excludePartial || city.coverage.status !== 'partial') && (!excludeGeographyRisk || city.geographyRisk === 'not-flagged') && (!minimumPopulation || city.population >= 10_000)).sort((a, b) => config.value(b) - config.value(a)).slice(0, 20);
   if (!ranked.length) {
-    setMarkup(document.querySelector('#ranking-table'), '<div class="compare-empty">No cities match these filters.</div>');
+    setMarkup(document.querySelector('#ranking-table'), `<div class="compare-empty">${escapeHtml(t('rankings.empty'))}</div>`);
     return;
   }
   const max = config.value(ranked[0]) || 1;
-  const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(config.label)}"></progress><b>${metricDisplay(config, city)}</b></span>${qualityBadge(city, true)}</button>`).join('');
-  setMarkup(document.querySelector('#ranking-table'), `<div class="rank-head"><span>Rank</span><span>City</span><span>${config.label}</span><span>Coverage</span></div>${rows}`);
+  const rows = ranked.map((city, index) => `<button data-city-id="${escapeHtml(city.id)}"><span>${String(index + 1).padStart(2, '0')}</span><span><strong>${escapeHtml(city.name)}</strong><small>${escapeHtml(city.county)} County</small></span><span><progress max="100" value="${config.value(city) / max * 100}" aria-label="Relative ${escapeHtml(label)}"></progress><b>${metricDisplay(config, city)}</b></span>${qualityBadge(city, true)}</button>`).join('');
+  setMarkup(document.querySelector('#ranking-table'), `<div class="rank-head"><span>${escapeHtml(t('rankings.col_rank'))}</span><span>${escapeHtml(t('rankings.col_city'))}</span><span>${escapeHtml(label)}</span><span>${escapeHtml(t('rankings.col_coverage'))}</span></div>${rows}`);
 }
 
 function addCompare(city) {
@@ -336,17 +348,17 @@ function addCompare(city) {
 
 function renderCompare() {
   document.querySelector('.compare-count').textContent = `${state.compare.length} / 4`;
-  if (!state.compare.length) { setMarkup(document.querySelector('#compare-view'), '<div class="compare-empty">Search above to add cities to this comparison.</div>'); return; }
-  const metrics = [['capacityMw', 'Reported capacity', 'MW'], ['projects', 'Project sites', 'sites'], ['generation', 'Generation midpoint', 'GWh'], ['growth5yPct', 'Five-year growth', '%']];
+  if (!state.compare.length) { setMarkup(document.querySelector('#compare-view'), `<div class="compare-empty">${escapeHtml(t('compare.empty'))}</div>`); return; }
+  const metrics = [['capacityMw', metricLabel('capacityMw'), 'MW'], ['projects', 'Project sites', 'sites'], ['generation', metricLabel('generation'), 'GWh'], ['growth5yPct', metricLabel('growth5yPct'), '%']];
   const metricRow = (city, [metric, label, unit]) => {
     const getValue = (item) => ({ generation: generationMid, capacityMw: capacityFloor })[metric]?.(item) ?? item[metric];
     const value = getValue(city);
     const max = Math.max(...state.compare.map((item) => getValue(item) || 0), 1);
     const display = value == null ? '—' : `${format.format(value)} ${unit}`;
-    return `<div class="compare-metric"><span>${label}</span><strong>${display}</strong><progress max="100" value="${(value || 0) / max * 100}" aria-label="Relative ${escapeHtml(label)}"></progress></div>`;
+    return `<div class="compare-metric"><span>${escapeHtml(label)}</span><strong>${display}</strong><progress max="100" value="${(value || 0) / max * 100}" aria-label="Relative ${escapeHtml(label)}"></progress></div>`;
   };
-  const chips = state.compare.map((city) => `<button data-remove="${escapeHtml(city.id)}">${escapeHtml(city.name)} <span aria-hidden="true">×</span><span class="sr-only">Remove</span></button>`).join('');
-  const cards = state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${escapeHtml(city.id)}" aria-label="Remove ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${zoneLabel(city)}</p>${metrics.map((metric) => metricRow(city, metric)).join('')}<button class="text-button" data-city-id="${escapeHtml(city.id)}">View city →</button></article>`).join('');
+  const chips = state.compare.map((city) => `<button data-remove="${escapeHtml(city.id)}">${escapeHtml(city.name)} <span aria-hidden="true">×</span><span class="sr-only">${escapeHtml(t('compare.remove'))}</span></button>`).join('');
+  const cards = state.compare.map((city) => `<article><div>${qualityBadge(city)}<button class="icon-button" data-remove="${escapeHtml(city.id)}" aria-label="${escapeHtml(t('compare.remove'))} ${escapeHtml(city.name)}">×</button></div><h3>${escapeHtml(city.name)}</h3><p>${escapeHtml(city.county)} County · Zone ${zoneLabel(city)}</p>${metrics.map((metric) => metricRow(city, metric)).join('')}<button class="text-button" data-city-id="${escapeHtml(city.id)}">${escapeHtml(t('compare.view_city'))}</button></article>`).join('');
   setMarkup(document.querySelector('#compare-view'), `<div class="compare-chips">${chips}</div><div class="compare-grid">${cards}</div>`);
 }
 
@@ -366,11 +378,11 @@ async function shareLocation(url, name, label) {
   }
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(url)
-      .then(() => toast(`${label} link copied`))
-      .catch(() => toast(`Copy the ${label.toLowerCase()} URL from your browser`));
+      .then(() => toast(t('toast.link_copied', { label })))
+      .catch(() => toast(t('toast.copy_url', { label: label.toLowerCase() })));
     return;
   }
-  toast(`Copy the ${label.toLowerCase()} URL from your browser`);
+  toast(t('toast.copy_url', { label: label.toLowerCase() }));
 }
 
 function restoreLocation() {
@@ -381,9 +393,48 @@ function restoreLocation() {
   if (county) renderCounty(county);
 }
 
-function bindEvents() {
+function bindShellControls() {
   setupSearch(document.querySelector('[data-search="primary"]'), 'primary');
   setupSearch(document.querySelector('[data-search="compare"]'), 'compare');
+  document.querySelector('.limits-dialog').addEventListener('click', (event) => { if (event.target.matches('dialog')) event.target.close(); });
+  document.querySelector('#lang-select').addEventListener('change', (event) => {
+    setLocale(event.target.value);
+    const url = new URL(location.href);
+    if (url.searchParams.has('lang')) {
+      url.searchParams.delete('lang');
+      history.replaceState(history.state, '', url);
+    }
+    rerenderApp();
+  });
+  document.querySelector('#map-metric').addEventListener('change', (event) => { state.mapMetric = event.target.value; renderMap(); });
+  document.querySelector('#rank-metric').addEventListener('change', (event) => { state.rankMetric = event.target.value; renderRankings(); });
+  document.querySelector('#exclude-partial').addEventListener('change', renderRankings);
+  document.querySelector('#exclude-geography-risk').addEventListener('change', renderRankings);
+  document.querySelector('#minimum-population').addEventListener('change', renderRankings);
+  document.querySelector('#county-select').addEventListener('change', (event) => { const county = state.data.counties.find((item) => item.slug === event.target.value); if (county) renderCounty(county, { historyMode: 'push' }); });
+}
+
+function rerenderApp() {
+  const previousCounty = state.county;
+  const minPop = document.querySelector('#minimum-population')?.checked ?? true;
+  const exGeo = document.querySelector('#exclude-geography-risk')?.checked ?? true;
+  const exPartial = document.querySelector('#exclude-partial')?.checked ?? true;
+  shell(state.data.meta);
+  document.querySelector('#minimum-population').checked = minPop;
+  document.querySelector('#exclude-geography-risk').checked = exGeo;
+  document.querySelector('#exclude-partial').checked = exPartial;
+  bindShellControls();
+  if (state.city) selectCity(state.city, { scroll: false, historyMode: 'none' });
+  if (previousCounty) renderCounty(previousCounty, { historyMode: 'none' });
+  renderMap();
+  renderRankings();
+  renderCompare();
+}
+
+function bindEvents() {
+  bindShellControls();
+  if (state.eventsBound) return;
+  state.eventsBound = true;
   document.addEventListener('click', async (event) => {
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (action === 'limits') document.querySelector('.limits-dialog').showModal();
@@ -407,13 +458,6 @@ function bindEvents() {
     const remove = event.target.closest('[data-remove]');
     if (remove) { state.compare = state.compare.filter((city) => city.id !== remove.dataset.remove); renderCompare(); }
   });
-  document.querySelector('.limits-dialog').addEventListener('click', (event) => { if (event.target.matches('dialog')) event.target.close(); });
-  document.querySelector('#map-metric').addEventListener('change', (event) => { state.mapMetric = event.target.value; renderMap(); });
-  document.querySelector('#rank-metric').addEventListener('change', (event) => { state.rankMetric = event.target.value; renderRankings(); });
-  document.querySelector('#exclude-partial').addEventListener('change', renderRankings);
-  document.querySelector('#exclude-geography-risk').addEventListener('change', renderRankings);
-  document.querySelector('#minimum-population').addEventListener('change', renderRankings);
-  document.querySelector('#county-select').addEventListener('change', (event) => { const county = state.data.counties.find((item) => item.slug === event.target.value); if (county) renderCounty(county, { historyMode: 'push' }); });
   document.addEventListener('keydown', (event) => { if ((event.metaKey || event.ctrlKey) && event.key === 'k') { event.preventDefault(); document.querySelector('#city-search').focus(); } });
   document.addEventListener('keydown', (event) => { if (['Enter', ' '].includes(event.key) && event.target.matches('[data-city-id][role="button"]')) { event.preventDefault(); event.target.dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
   document.addEventListener('click', (event) => { if (!event.target.closest('.search-wrap')) document.querySelectorAll('.search-results').forEach((result) => { result.hidden = true; }); });
@@ -421,6 +465,7 @@ function bindEvents() {
 }
 
 async function start() {
+  setLocale(detectLocale(), { persist: false });
   try {
     const [dataResponse, boundaryResponse] = await Promise.all([fetch(DATA_URL), fetch(BOUNDARIES_URL)]); if (!dataResponse.ok) throw new Error(`Data request failed (${dataResponse.status})`);
     state.data = await dataResponse.json(); state.boundaries = boundaryResponse.ok ? await boundaryResponse.json() : {};
@@ -436,7 +481,7 @@ async function start() {
     if (county) renderCounty(county, { historyMode: 'replace' });
     state.compare = uniqueCities([city, state.data.cities.find((item) => item.name === 'Pleasanton')]);
     bindEvents(); renderMap(); renderRankings(); renderCompare();
-  } catch (error) { setMarkup(app, `<main class="error"><p class="eyebrow">California Solar Atlas</p><h1>The data could not be loaded.</h1><p>${escapeHtml(error.message)}</p><button type="button" data-reload>Try again</button></main>`); document.querySelector('[data-reload]').addEventListener('click', () => location.reload()); }
+  } catch (error) { setMarkup(app, `<main class="error"><p class="eyebrow">${escapeHtml(t('app.title'))}</p><h1>${escapeHtml(t('error.heading'))}</h1><p>${escapeHtml(error.message)}</p><button type="button" data-reload>${escapeHtml(t('error.try_again'))}</button></main>`); document.querySelector('[data-reload]').addEventListener('click', () => location.reload()); }
 }
 
 await start();
