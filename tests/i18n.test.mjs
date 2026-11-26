@@ -19,8 +19,8 @@ import {
 const PLACEHOLDER_RE = /\{[a-zA-Z0-9_]+\}/g;
 const placeholders = (str) => [...str.matchAll(PLACEHOLDER_RE)].map((m) => m[0]).sort();
 
-test('all 45 locales load with 100% key and placeholder parity', () => {
-  assert.equal(SUPPORTED_LOCALES.length, 45);
+test('all 48 locales load with 100% key and placeholder parity', () => {
+  assert.equal(SUPPORTED_LOCALES.length, 48);
   const en = getCatalog('en');
   const enKeys = Object.keys(en).sort();
   assert.ok(enKeys.length > 0);
@@ -60,6 +60,16 @@ test('locale resolution and navigator.language detection', () => {
   assert.equal(resolveLocale('ur-PK'), 'ur');
   assert.equal(resolveLocale('tl-PH'), 'fil');
   assert.equal(resolveLocale('hi-IN'), 'hi');
+  assert.equal(resolveLocale('bs'), 'bs');
+  assert.equal(resolveLocale('bs-BA'), 'bs');
+  assert.equal(resolveLocale('hr'), 'hr');
+  assert.equal(resolveLocale('hr-HR'), 'hr');
+  assert.equal(resolveLocale('sr'), 'sr');
+  assert.equal(resolveLocale('sr-RS'), 'sr');
+  assert.equal(resolveLocale('sr-Cyrl'), 'sr');
+  assert.equal(resolveLocale('sr-Latn'), 'sr');
+  assert.equal(resolveLocale('sr-Cyrl-RS'), 'sr');
+  assert.equal(resolveLocale('sr-Latn-RS'), 'sr');
   assert.equal(resolveLocale('xx-YY'), 'en');
 
   assert.equal(detectLocale({ search: '', storage: null, navigatorObj: { languages: ['ja-JP', 'en-US'], language: 'ja-JP' } }), 'ja');
