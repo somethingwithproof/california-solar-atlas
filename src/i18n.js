@@ -88,7 +88,8 @@ export function resolveLocale(tag) {
   return SUPPORTED_LOCALES.find((loc) => loc.toLowerCase() === base) || 'en';
 }
 
-export function detectLocale({ search = globalThis.location?.search, storage = globalThis.localStorage, navigatorObj = globalThis.navigator } = {}) {
+export function detectLocale(options = {}) {
+  const { search = globalThis.location?.search, navigatorObj = globalThis.navigator } = options;
   try {
     if (search) {
       const param = new URLSearchParams(search).get('lang');
@@ -97,6 +98,7 @@ export function detectLocale({ search = globalThis.location?.search, storage = g
   } catch { /* ignore invalid search string */ }
 
   try {
+    const storage = Object.hasOwn(options, 'storage') ? options.storage : globalThis.localStorage;
     const saved = storage?.getItem?.(STORAGE_KEY);
     if (saved) return resolveLocale(saved);
   } catch { /* storage may be unavailable */ }
@@ -140,11 +142,11 @@ export function setLocale(locale, { persist = true, doc = globalThis.document } 
 
 export function t(key, params = null, locale = activeLocale) {
   const catalog = getCatalog(locale);
-  let template = catalog[key] ?? CATALOGS.en[key] ?? key;
-  if (params) {
-    for (const [name, value] of Object.entries(params)) {
-      template = template.replaceAll(`{${name}}`, String(value));
-    }
-  }
-  return template;
+  const template = Object.hasOwn(catalog, key)
+    ? catalog[key]
+    : (Object.hasOwn(CATALOGS.en, key) ? CATALOGS.en[key] : key);
+  if (!params) return template;
+  return template.replace(/\{([a-zA-Z0-9_]+)\}/g, (match, name) => (
+    Object.hasOwn(params, name) ? String(params[name]) : match
+  ));
 }

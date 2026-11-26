@@ -399,6 +399,11 @@ function bindShellControls() {
   document.querySelector('.limits-dialog').addEventListener('click', (event) => { if (event.target.matches('dialog')) event.target.close(); });
   document.querySelector('#lang-select').addEventListener('change', (event) => {
     setLocale(event.target.value);
+    const url = new URL(location.href);
+    if (url.searchParams.has('lang')) {
+      url.searchParams.delete('lang');
+      history.replaceState(history.state, '', url);
+    }
     rerenderApp();
   });
   document.querySelector('#map-metric').addEventListener('change', (event) => { state.mapMetric = event.target.value; renderMap(); });
@@ -410,6 +415,7 @@ function bindShellControls() {
 }
 
 function rerenderApp() {
+  const previousCounty = state.county;
   const minPop = document.querySelector('#minimum-population')?.checked ?? true;
   const exGeo = document.querySelector('#exclude-geography-risk')?.checked ?? true;
   const exPartial = document.querySelector('#exclude-partial')?.checked ?? true;
@@ -419,7 +425,7 @@ function rerenderApp() {
   document.querySelector('#exclude-partial').checked = exPartial;
   bindShellControls();
   if (state.city) selectCity(state.city, { scroll: false, historyMode: 'none' });
-  if (state.county) renderCounty(state.county, { historyMode: 'none' });
+  if (previousCounty) renderCounty(previousCounty, { historyMode: 'none' });
   renderMap();
   renderRankings();
   renderCompare();
