@@ -19,8 +19,8 @@ import {
 const PLACEHOLDER_RE = /\{[a-zA-Z0-9_]+\}/g;
 const placeholders = (str) => [...str.matchAll(PLACEHOLDER_RE)].map((m) => m[0]).sort();
 
-test('all 20 Tier 1 locales load with 100% key and placeholder parity', () => {
-  assert.equal(SUPPORTED_LOCALES.length, 20);
+test('all 45 locales load with 100% key and placeholder parity', () => {
+  assert.equal(SUPPORTED_LOCALES.length, 45);
   const en = getCatalog('en');
   const enKeys = Object.keys(en).sort();
   assert.ok(enKeys.length > 0);
@@ -49,6 +49,16 @@ test('locale resolution and navigator.language detection', () => {
   assert.equal(resolveLocale('zh-TW'), 'zh-TW');
   assert.equal(resolveLocale('zh-Hant-HK'), 'zh-TW');
   assert.equal(resolveLocale('ar-SA'), 'ar');
+  assert.equal(resolveLocale('ar-EG'), 'ar-EG');
+  assert.equal(resolveLocale('ar-MA'), 'ar-MA');
+  assert.equal(resolveLocale('fr-MA'), 'fr-MA');
+  assert.equal(resolveLocale('fr-SN'), 'fr-SN');
+  assert.equal(resolveLocale('sw'), 'sw-KE');
+  assert.equal(resolveLocale('yo'), 'yo-NG');
+  assert.equal(resolveLocale('fa-IR'), 'fa');
+  assert.equal(resolveLocale('iw-IL'), 'he');
+  assert.equal(resolveLocale('ur-PK'), 'ur');
+  assert.equal(resolveLocale('tl-PH'), 'fil');
   assert.equal(resolveLocale('hi-IN'), 'hi');
   assert.equal(resolveLocale('xx-YY'), 'en');
 
@@ -57,16 +67,19 @@ test('locale resolution and navigator.language detection', () => {
   assert.equal(detectLocale({ search: '', storage: { getItem: () => 'pt-BR' }, navigatorObj: { language: 'es-MX' } }), 'pt-BR');
 });
 
-test('RTL direction and document attributes apply for Arabic and reset for LTR', () => {
+test('RTL direction and document attributes apply for all 6 RTL locales and reset for LTR', () => {
   const dom = new JSDOM('<!doctype html><html lang="en"><head><title>California Solar Atlas</title></head><body><a class="skip-link">Skip to content</a></body></html>');
+  const rtlLocales = new Set(['ar', 'ar-EG', 'ar-MA', 'fa', 'he', 'ur']);
   for (const locale of SUPPORTED_LOCALES) {
-    assert.equal(isRtl(locale), locale === 'ar');
+    assert.equal(isRtl(locale), rtlLocales.has(locale));
   }
 
-  setLocale('ar', { persist: false, doc: dom.window.document });
-  assert.equal(getLocale(), 'ar');
-  assert.equal(dom.window.document.documentElement.lang, 'ar');
-  assert.equal(dom.window.document.documentElement.dir, 'rtl');
+  for (const rtl of rtlLocales) {
+    setLocale(rtl, { persist: false, doc: dom.window.document });
+    assert.equal(getLocale(), rtl);
+    assert.equal(dom.window.document.documentElement.lang, rtl);
+    assert.equal(dom.window.document.documentElement.dir, 'rtl');
+  }
 
   setLocale('en', { persist: false, doc: dom.window.document });
   assert.equal(dom.window.document.documentElement.lang, 'en');
