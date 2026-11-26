@@ -20,6 +20,11 @@ The interface is designed for GitHub Pages: no server, database, API keys, or ru
 - Shareable city and county URLs plus city CSV and SVG downloads
 - Explicit measured, modeled, partial-coverage, and unavailable states
 - Keyboard navigation, reduced-motion support, and responsive layouts
+- 20 Tier 1 interface locales with browser language auto-detection, header language selector, and RTL layout for Arabic
+
+## Localization
+
+The interface includes translations in `src/locales/` for 20 Tier 1 locales (`en`, `de`, `es`, `fr`, `it`, `pt-BR`, `nl`, `ru`, `uk`, `ja`, `ko`, `zh-CN`, `zh-TW`, `ar`, `hi`, `pl`, `tr`, `sv`, `vi`, `id`). On initial load, the app checks `?lang=`, saved `localStorage`, and `navigator.languages` / `navigator.language`, falling back to English. Selecting Arabic (`ar`) sets `<html lang="ar" dir="rtl">`.
 
 ## Run locally
 

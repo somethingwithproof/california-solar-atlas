@@ -33,3 +33,12 @@
 .eyebrow span.term,.status span.term{width:auto;height:auto;background:none;border-radius:0}
 .term{border-bottom:1px dotted currentColor;cursor:help;position:relative;outline-offset:3px;white-space:nowrap;width:auto;height:auto;background:none;flex:0 0 auto}.term>.tip{display:none;position:absolute;left:0;bottom:calc(100% + 9px);z-index:40;width:max-content!important;height:auto!important;max-width:min(320px,72vw);flex:none!important;border-radius:2px!important;padding:.6rem .7rem;background:var(--card)!important;color:var(--ink);border-left:2px solid var(--sun);box-shadow:0 14px 34px rgba(12,33,27,.4);font:400 .68rem/1.5 var(--sans)!important;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}.term:hover>.tip,.term:focus>.tip,.term:focus-visible>.tip{display:block}
 .panel-scope{display:block;margin-top:.35rem;color:#9db0aa;font-size:.62rem;line-height:1.45;font-weight:400;max-width:52ch}
+.lang-select{border:1px solid var(--line);background:var(--card);color:var(--ink);padding:.35rem .55rem;font-size:.7rem;font-weight:600;border-radius:4px;cursor:pointer;max-width:135px}
+.lang-select:focus-visible{outline:2px solid var(--sun);outline-offset:2px}
+[dir="rtl"] nav{margin-left:0;margin-right:auto}
+[dir="rtl"] .coverage-note,[dir="rtl"] .municipal-note{border-left:0;border-right:3px solid #86cc9f}
+[dir="rtl"] .coverage-note.partial,[dir="rtl"] .municipal-note{border-right-color:var(--sun)}
+[dir="rtl"] .dialog-close{right:auto;left:1rem}
+[dir="rtl"] .search-results button,[dir="rtl"] .ranking-table>button,[dir="rtl"] .map-summary button,[dir="rtl"] .county-cities button{text-align:right}
+[dir="rtl"] .map-legend{margin-left:0;margin-right:auto}
+[dir="rtl"] .term>.tip{left:auto;right:0;border-left:0;border-right:2px solid var(--sun);text-align:right}
